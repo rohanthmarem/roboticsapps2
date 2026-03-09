@@ -1,0 +1,24 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(rm:*)",
+      "Bash(npx vite:*)",
+      "Bash(npx supabase:*)",
+      "Read(//c/Users/Rohan/.config/supabase/**)",
+      "Read(//c/Users/Rohan/Downloads/roboticsapps2/$APPDATA/supabase/**)",
+      "Read(//c/Users/Rohan/Downloads/roboticsapps2/$LOCALAPPDATA/supabase/**)",
+      "Read(//c/Users/Rohan/**)",
+      "Bash(dir:*)",
+      "Bash(mkdir:*)",
+      "Bash(xargs grep:*)",
+      "Bash(git:*)",
+      "Bash(grep:*)",
+      "Bash(npx vitest:*)",
+      "Bash(npx tsc:*)",
+      "Bash(ls:*)",
+      "Bash(supabase projects:*)",
+      "Bash(where npx:*)"
+    ]
+  }
+}

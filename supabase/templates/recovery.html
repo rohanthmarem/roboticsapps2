@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reset Your Password</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f4fa;font-family:Georgia,'Times New Roman',serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background: linear-gradient(180deg, #a8d3ff 0%, #e8f3ff 40%, #fff4df 100%); min-height:100vh;">
+    <tr>
+      <td align="center" style="padding:48px 24px;">
+        <!-- Logo -->
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+          <tr>
+            <td style="padding-right:10px;">
+              <div style="width:8px;height:8px;background-color:#000000;"></div>
+            </td>
+            <td>
+              <span style="font-family:Helvetica,Arial,sans-serif;font-size:13px;font-weight:600;color:#000000;letter-spacing:-0.3px;">WOSS Robotics</span>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Card -->
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background-color:#ffffff;border:2px solid #000000;">
+          <tr>
+            <td style="padding:40px 36px 36px;">
+              <!-- Label -->
+              <p style="font-family:'Courier New',monospace;font-size:11px;color:#6c6c6c;text-transform:uppercase;letter-spacing:2px;margin:0 0 12px;">
+                Account Recovery
+              </p>
+
+              <!-- Heading -->
+              <h1 style="font-family:Georgia,'Times New Roman',serif;font-size:28px;color:#000000;letter-spacing:-0.8px;line-height:1.15;margin:0 0 8px;">
+                Reset your password
+              </h1>
+
+              <!-- Subtext -->
+              <p style="font-family:Georgia,'Times New Roman',serif;font-size:15px;color:#6c6c6c;letter-spacing:-0.2px;line-height:1.5;margin:0 0 32px;">
+                We received a request to reset the password for your WOSS Robotics account. Click the button below to choose a new password.
+              </p>
+
+              <!-- CTA Button -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
+                <tr>
+                  <td align="center">
+                    <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery"
+                       style="display:inline-block;background-color:#000000;color:#ffffff;font-family:'Courier New',monospace;font-size:13px;text-decoration:none;padding:16px 32px;letter-spacing:0.5px;">
+                      &#9642;&nbsp;&nbsp;Reset Password
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Divider -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
+                <tr>
+                  <td style="border-top:1px solid #dbe0ec;"></td>
+                </tr>
+              </table>
+
+              <!-- Note -->
+              <p style="font-family:Georgia,'Times New Roman',serif;font-size:14px;color:#6c6c6c;line-height:1.5;margin:0;">
+                If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
+              </p>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Footer -->
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin-top:24px;">
+          <tr>
+            <td align="center">
+              <p style="font-family:'Courier New',monospace;font-size:10px;color:#6c6c6c;margin:0;">
+                WOSS Robotics &middot; 2026-2027 Executive Applications
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
