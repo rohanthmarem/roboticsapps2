@@ -94,29 +94,31 @@ export function useQuestions() {
   return { questions, loading, refetch: fetchQuestions };
 }
 
-export function useApplications(userId?: string) {
-  const [applications, setApplications] = useState<any[]>([]);
+// Returns the single application for a user, with its positions via junction table
+export function useApplication(userId?: string) {
+  const [application, setApplication] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchApplications = useCallback(async () => {
+  const fetchApplication = useCallback(async () => {
     if (!userId) { setLoading(false); return; }
     const { data, error } = await supabase
       .from("applications")
-      .select("*, positions(title, description)")
+      .select("*, application_positions(*, positions(title, description, spots))")
       .eq("user_id", userId)
-      .order("created_at", { ascending: false });
-    if (error) console.error("Failed to fetch applications:", error);
-    setApplications(data || []);
+      .maybeSingle();
+    if (error) console.error("Failed to fetch application:", error);
+    setApplication(data);
     setLoading(false);
   }, [userId]);
 
   useEffect(() => {
-    fetchApplications();
-  }, [fetchApplications]);
+    fetchApplication();
+  }, [fetchApplication]);
 
-  return { applications, loading, refetch: fetchApplications };
+  return { application, loading, refetch: fetchApplication };
 }
 
+// Returns all applications for admin view, each with positions and profile
 export function useAllApplications() {
   const [applications, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,7 +126,7 @@ export function useAllApplications() {
   const fetchApplications = useCallback(async () => {
     const { data, error } = await supabase
       .from("applications")
-      .select("*, positions(title), profiles(first_name, last_name, email)")
+      .select("*, application_positions(*, positions(title)), profiles(first_name, last_name, email)")
       .order("created_at", { ascending: false });
     if (error) console.error("Failed to fetch all applications:", error);
     setApplications(data || []);

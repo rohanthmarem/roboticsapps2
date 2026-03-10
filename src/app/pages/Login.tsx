@@ -1,19 +1,16 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
-import { Loader2, CheckCircle2, ArrowRight } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 
 export function Login() {
-  const { signInWithOtp, verifyOtp } = useAuth();
-  const navigate = useNavigate();
+  const { signInWithOtp } = useAuth();
   const [email, setEmail] = useState("");
-  const [otp, setOtp] = useState("");
-  const [step, setStep] = useState<"email" | "verify">("email");
+  const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleSendOtp = async (e: React.FormEvent) => {
+  const handleSendLink = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim()) return;
     setLoading(true);
@@ -23,34 +20,15 @@ export function Login() {
     if (err) {
       setError(err.message);
     } else {
-      setStep("verify");
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!otp.trim()) return;
-    setLoading(true);
-    setError("");
-    const { error: err } = await verifyOtp(email.trim(), otp.trim());
-    setLoading(false);
-    if (err) {
-      setError(err.message);
-    } else {
-      // Profile will be loaded by AuthContext via onAuthStateChange.
-      // ProtectedRoute will redirect to the correct dashboard based on role.
-      // Navigate to /applicant as default — admins get redirected by ProtectedRoute.
-      navigate("/applicant");
+      setSent(true);
     }
   };
 
   return (
     <div className="min-h-screen relative overflow-hidden flex flex-col items-center justify-center">
-      {/* Background */}
       <div className="absolute inset-0 bg-gradient-to-b from-[#a8d3ff] via-[#e8f3ff] to-[#fff4df]" />
 
       <div className="relative z-10 w-full max-w-md px-6">
-        {/* Logo */}
         <div className="flex items-center gap-2.5 mb-12 justify-center">
           <div className="w-2 h-2 bg-black" />
           <span className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm tracking-tight">
@@ -60,7 +38,7 @@ export function Login() {
 
         <div className="bg-white border-2 border-black p-8 md:p-10">
           <AnimatePresence mode="wait">
-            {step === "email" ? (
+            {!sent ? (
               <motion.div
                 key="email"
                 initial={{ opacity: 0, y: 8 }}
@@ -77,10 +55,10 @@ export function Login() {
                   Executive Applications
                 </h1>
                 <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-base tracking-[-0.3px] mb-8">
-                  Enter your email to receive a verification code.
+                  Enter your school email. We'll send a sign-in link to your inbox.
                 </p>
 
-                <form onSubmit={handleSendOtp}>
+                <form onSubmit={handleSendLink}>
                   <label className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.08em] block mb-2">
                     Email Address
                   </label>
@@ -88,7 +66,7 @@ export function Login() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@student.wrdsb.ca"
+                    placeholder="1lastfirst@hdsb.ca"
                     className="w-full border border-[#dbe0ec] bg-white px-4 py-3.5 font-['Radio_Canada_Big',sans-serif] text-sm text-black outline-none focus:border-black transition-colors placeholder-[#6c6c6c] mb-4"
                     required
                   />
@@ -110,7 +88,7 @@ export function Login() {
                       <>
                         <div className="bg-white shrink-0 w-[5px] h-[5px]" />
                         <span className="font-['Geist_Mono',monospace] text-[13px] text-white whitespace-nowrap leading-none">
-                          Send Verification Code
+                          Send Sign-In Link
                         </span>
                       </>
                     )}
@@ -119,86 +97,50 @@ export function Login() {
               </motion.div>
             ) : (
               <motion.div
-                key="verify"
+                key="sent"
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
               >
                 <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] uppercase tracking-[0.1em] mb-3">
-                  Verify
+                  Check Your Inbox
                 </p>
                 <h1
                   className="font-['Source_Serif_4',serif] text-[32px] text-black tracking-[-1px] mb-2"
                   style={{ lineHeight: 1.1 }}
                 >
-                  Check your email
+                  Link sent
                 </h1>
                 <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-base tracking-[-0.3px] mb-1">
-                  We sent a 6-digit code to
+                  We sent a sign-in link to
                 </p>
-                <p className="font-['Geist_Mono',monospace] text-[13px] text-black mb-8">
+                <p className="font-['Geist_Mono',monospace] text-[13px] text-black mb-6">
                   {email}
                 </p>
+                <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm mb-8">
+                  Click the link in your email to sign in. It may take a minute to arrive — check your spam folder if needed.
+                </p>
 
-                <form onSubmit={handleVerifyOtp}>
-                  <label className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.08em] block mb-2">
-                    Verification Code
-                  </label>
-                  <input
-                    type="text"
-                    value={otp}
-                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                    placeholder="000000"
-                    className="w-full border border-[#dbe0ec] bg-white px-4 py-3.5 font-['Geist_Mono',monospace] text-2xl text-black text-center tracking-[0.3em] outline-none focus:border-black transition-colors placeholder-[#dbe0ec] mb-4"
-                    maxLength={6}
-                    required
-                  />
-
-                  {error && (
-                    <p className="font-['Source_Serif_4',serif] text-red-600 text-sm mb-4">
-                      {error}
-                    </p>
-                  )}
-
+                <div className="flex items-center justify-between">
                   <button
-                    type="submit"
-                    disabled={loading || otp.length < 6}
-                    className="w-full bg-black flex gap-[10px] items-center justify-center px-5 py-4 hover:bg-zinc-800 transition-colors disabled:opacity-50 mb-4"
+                    type="button"
+                    onClick={() => {
+                      setSent(false);
+                      setError("");
+                    }}
+                    className="font-['Geist_Mono',monospace] text-[12px] text-[#6c6c6c] hover:text-black transition-colors"
                   >
-                    {loading ? (
-                      <Loader2 className="w-4 h-4 text-white animate-spin" />
-                    ) : (
-                      <>
-                        <div className="bg-white shrink-0 w-[5px] h-[5px]" />
-                        <span className="font-['Geist_Mono',monospace] text-[13px] text-white whitespace-nowrap leading-none">
-                          Verify & Sign In
-                        </span>
-                      </>
-                    )}
+                    ← Change email
                   </button>
-
-                  <div className="flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStep("email");
-                        setOtp("");
-                        setError("");
-                      }}
-                      className="font-['Geist_Mono',monospace] text-[12px] text-[#6c6c6c] hover:text-black transition-colors"
-                    >
-                      ← Change email
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSendOtp}
-                      disabled={loading}
-                      className="font-['Geist_Mono',monospace] text-[12px] text-[#6c6c6c] hover:text-black transition-colors"
-                    >
-                      Resend code
-                    </button>
-                  </div>
-                </form>
+                  <button
+                    type="button"
+                    onClick={handleSendLink}
+                    disabled={loading}
+                    className="font-['Geist_Mono',monospace] text-[12px] text-[#6c6c6c] hover:text-black transition-colors"
+                  >
+                    {loading ? "Sending..." : "Resend link"}
+                  </button>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

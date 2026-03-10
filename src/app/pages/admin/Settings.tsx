@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { useSettings, usePositions } from "../../lib/hooks";
 import { supabase } from "../../lib/supabase";
 
@@ -18,6 +19,7 @@ export function AdminSettings() {
   const [appWindowOpen, setAppWindowOpen] = useState(false);
   const [interviewsOpen, setInterviewsOpen] = useState(false);
   const [decisionsReleased, setDecisionsReleased] = useState(false);
+  const [limitMode, setLimitMode] = useState<"characters" | "words">("characters");
   const [deadline, setDeadline] = useState("");
   const [interviewWindow, setInterviewWindow] = useState("");
   const [decisionsDate, setDecisionsDate] = useState("");
@@ -25,12 +27,14 @@ export function AdminSettings() {
   // New position form
   const [newPosTitle, setNewPosTitle] = useState("");
   const [newPosDesc, setNewPosDesc] = useState("");
+  const [newPosSpots, setNewPosSpots] = useState("1");
 
   useEffect(() => {
     if (!loading) {
       setAppWindowOpen(settings.application_window_open === true || settings.application_window_open === "true");
       setInterviewsOpen(settings.interview_scheduling_open === true || settings.interview_scheduling_open === "true");
       setDecisionsReleased(settings.decisions_released === true || settings.decisions_released === "true");
+      setLimitMode(settings.limit_mode === "words" ? "words" : "characters");
       setDeadline(typeof settings.application_deadline === "string" ? settings.application_deadline : "");
       setInterviewWindow(typeof settings.interview_window === "string" ? settings.interview_window : "");
       setDecisionsDate(typeof settings.decisions_date === "string" ? settings.decisions_date : "");
@@ -43,15 +47,18 @@ export function AdminSettings() {
     const { error: err } = await supabase.from("positions").insert({
       title: newPosTitle.trim(),
       description: newPosDesc.trim(),
+      spots: parseInt(newPosSpots) || 1,
       sort_order: positions.length,
     });
     if (err) {
       console.error("Failed to add position:", err);
-      setError(`Failed to add position: ${err.message}. Have you run supabase-rls-fix.sql?`);
+      setError(`Failed to add position: ${err.message}`);
       return;
     }
     setNewPosTitle("");
     setNewPosDesc("");
+    setNewPosSpots("1");
+    toast.success("Position added");
     refetchPositions();
   };
 
@@ -59,7 +66,6 @@ export function AdminSettings() {
     setError(null);
     const { error: err } = await supabase.from("positions").update({ is_open: !is_open }).eq("id", id);
     if (err) {
-      console.error("Failed to toggle position:", err);
       setError(`Failed to toggle position: ${err.message}`);
     }
     refetchPositions();
@@ -69,9 +75,13 @@ export function AdminSettings() {
     setError(null);
     const { error: err } = await supabase.from("positions").delete().eq("id", id);
     if (err) {
-      console.error("Failed to delete position:", err);
       setError(`Failed to delete position: ${err.message}`);
     }
+    refetchPositions();
+  };
+
+  const handleUpdateSpots = async (id: string, spots: number) => {
+    await supabase.from("positions").update({ spots }).eq("id", id);
     refetchPositions();
   };
 
@@ -82,9 +92,11 @@ export function AdminSettings() {
       await updateSetting("application_window_open", appWindowOpen);
       await updateSetting("interview_scheduling_open", interviewsOpen);
       await updateSetting("decisions_released", decisionsReleased);
+      await updateSetting("limit_mode", limitMode);
       await updateSetting("application_deadline", deadline);
       await updateSetting("interview_window", interviewWindow);
       await updateSetting("decisions_date", decisionsDate);
+      toast.success("Settings saved");
     } catch (e: any) {
       setError(`Failed to save settings: ${e.message}`);
     }
@@ -114,7 +126,6 @@ export function AdminSettings() {
         </p>
       </header>
 
-      {/* Error Banner */}
       {error && (
         <div className="border border-red-300 bg-red-50 px-5 py-4 flex items-start justify-between gap-4">
           <p className="font-['Radio_Canada_Big',sans-serif] text-sm text-red-700">{error}</p>
@@ -154,11 +165,43 @@ export function AdminSettings() {
         </div>
       </section>
 
+      {/* Response Limit Mode */}
+      <section>
+        <div className="flex items-center justify-between py-5 border-t border-[#dbe0ec]">
+          <h2 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-base">Response Limits</h2>
+          <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">002</span>
+        </div>
+        <div className="border border-[#dbe0ec] px-6 py-5">
+          <div className="flex items-start gap-4">
+            <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] w-6 mt-0.5">01</span>
+            <div className="flex-1">
+              <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm">Limit Mode</p>
+              <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm mt-0.5 mb-4">
+                Choose whether FRQ limits are counted by characters or words.
+              </p>
+              <div className="flex gap-3">
+                {(["characters", "words"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setLimitMode(mode)}
+                    className={`px-4 py-2 font-['Geist_Mono',monospace] text-[12px] border transition-colors ${
+                      limitMode === mode ? "bg-black text-white border-black" : "bg-white text-black border-[#dbe0ec] hover:border-black"
+                    }`}
+                  >
+                    {mode === "characters" ? "Character-based" : "Word-based"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Dates */}
       <section>
         <div className="flex items-center justify-between py-5 border-t border-[#dbe0ec]">
           <h2 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-base">Key Dates</h2>
-          <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">002</span>
+          <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">003</span>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
           <div>
@@ -180,7 +223,7 @@ export function AdminSettings() {
       <section>
         <div className="flex items-center justify-between py-5 border-t border-[#dbe0ec]">
           <h2 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-base">Executive Positions</h2>
-          <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">003</span>
+          <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">004</span>
         </div>
 
         <div className="border border-[#dbe0ec]">
@@ -188,12 +231,25 @@ export function AdminSettings() {
             <div key={pos.id} className={`flex items-center justify-between px-6 py-4 ${i !== 0 ? "border-t border-[#dbe0ec]" : ""}`}>
               <div className="flex items-start gap-4 flex-1">
                 <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] shrink-0 mt-0.5">{String(i + 1).padStart(2, "0")}</span>
-                <div>
+                <div className="flex-1">
                   <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm">{pos.title}</p>
                   {pos.description && <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm mt-0.5">{pos.description}</p>}
                 </div>
               </div>
               <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-1.5">
+                  <label className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c]">Spots:</label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    className="w-12 border border-[#dbe0ec] bg-white px-2 py-0.5 font-['Geist_Mono',monospace] text-[11px] text-black text-center outline-none focus:border-black"
+                    value={pos.spots || 1}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "");
+                      handleUpdateSpots(pos.id, parseInt(val) || 1);
+                    }}
+                  />
+                </div>
                 <button
                   onClick={() => handleTogglePosition(pos.id, pos.is_open)}
                   className={`font-['Geist_Mono',monospace] text-[11px] px-2 py-0.5 border ${pos.is_open ? "border-black text-black" : "border-[#dbe0ec] text-[#6c6c6c]"}`}
@@ -216,9 +272,20 @@ export function AdminSettings() {
                 <label className={labelCls}>Position Title</label>
                 <input className={fieldCls} value={newPosTitle} onChange={(e) => setNewPosTitle(e.target.value)} placeholder="e.g. Director of PR" />
               </div>
-              <div className="md:col-span-6">
+              <div className="md:col-span-4">
                 <label className={labelCls}>Description</label>
                 <input className={fieldCls} value={newPosDesc} onChange={(e) => setNewPosDesc(e.target.value)} placeholder="Brief description..." />
+              </div>
+              <div className="md:col-span-2">
+                <label className={labelCls}>Spots</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className={fieldCls}
+                  value={newPosSpots}
+                  onChange={(e) => setNewPosSpots(e.target.value.replace(/\D/g, ""))}
+                  placeholder="1"
+                />
               </div>
               <div className="md:col-span-2">
                 <button onClick={handleAddPosition} className="w-full bg-black flex gap-[10px] items-center justify-center px-4 py-3 hover:bg-zinc-800 transition-colors">

@@ -1,0 +1,1 @@
+ALTER TABLE positions ADD COLUMN IF NOT EXISTS spots integer DEFAULT 1;

@@ -1,8 +1,15 @@
+import { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Link } from "react-router";
-import { ArrowRight, PenTool, Loader2 } from "lucide-react";
+import { Link, useNavigate } from "react-router";
+import { ArrowRight, PenTool, Loader2, CheckCircle2, Circle, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  eachDayOfInterval, isSameDay, isSameMonth, format, parseISO, isToday,
+  addMonths, subMonths,
+} from "date-fns";
 import { useAuth } from "../../lib/AuthContext";
-import { useApplications, useSettings } from "../../lib/hooks";
+import { useApplication, useSettings } from "../../lib/hooks";
+import { supabase } from "../../lib/supabase";
 import { STATUS_LABELS } from "../../data";
 import { cn } from "../../lib/utils";
 
@@ -29,8 +36,9 @@ function PrimaryButton({ to, children, className }: { to?: string; children: Rea
 
 export function ApplicantDashboard() {
   const { profile } = useAuth();
-  const { applications, loading } = useApplications(profile?.id);
+  const { application, loading } = useApplication(profile?.id);
   const { settings } = useSettings();
+  const navigate = useNavigate();
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -39,7 +47,72 @@ export function ApplicantDashboard() {
     return "Good evening";
   };
 
-  const firstName = profile?.first_name || profile?.email?.split("@")[0] || "there";
+  const firstName = profile?.first_name || "there";
+
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
+  const [activityCount, setActivityCount] = useState(0);
+  const [responseCount, setResponseCount] = useState(0);
+  const [honorsCount, setHonorsCount] = useState(0);
+
+  useEffect(() => {
+    if (!profile?.id) return;
+    supabase.from("activities").select("id", { count: "exact", head: true }).eq("user_id", profile.id)
+      .then(({ count }) => setActivityCount(count || 0));
+    if (application?.id) {
+      supabase.from("responses").select("id", { count: "exact", head: true }).eq("application_id", application.id)
+        .then(({ count }) => setResponseCount(count || 0));
+    }
+    supabase.from("honors").select("id", { count: "exact", head: true }).eq("user_id", profile.id)
+      .then(({ count }) => setHonorsCount(count || 0));
+  }, [profile?.id, application?.id]);
+
+  const appPositions = application?.application_positions || [];
+
+  const sections = [
+    {
+      key: "profile",
+      label: "Profile",
+      path: "/applicant/profile",
+      complete: !!(profile?.first_name && profile?.last_name && profile?.grade),
+    },
+    {
+      key: "positions",
+      label: "Positions",
+      path: "/applicant/positions",
+      complete: appPositions.length > 0,
+    },
+    {
+      key: "activities",
+      label: "Activities",
+      path: "/applicant/activities",
+      complete: activityCount > 0,
+    },
+    {
+      key: "responses",
+      label: "Responses",
+      path: "/applicant/responses",
+      complete: responseCount > 0,
+    },
+    {
+      key: "honors",
+      label: "Honors",
+      path: "/applicant/honors",
+      complete: honorsCount > 0,
+    },
+    {
+      key: "review",
+      label: "Review",
+      path: "/applicant/review",
+      complete: !!application && application.status !== "draft",
+    },
+  ];
+
+  const completedCount = sections.filter((s) => s.complete).length;
+  const totalSections = sections.length;
+  const progressPercent = totalSections > 0 ? (completedCount / totalSections) * 100 : 0;
+
+  const submittedPositionCount = application?.status !== "draft" ? appPositions.length : 0;
+  const positionProgressPercent = appPositions.length > 0 ? (submittedPositionCount / appPositions.length) * 100 : 0;
 
   if (loading) {
     return (
@@ -50,7 +123,7 @@ export function ApplicantDashboard() {
   }
 
   return (
-    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 fill-mode-forwards">
+    <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
       {/* Header */}
       <header className="border-b border-[#dbe0ec] pb-8">
         <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] uppercase tracking-[0.1em] mb-3">
@@ -63,73 +136,162 @@ export function ApplicantDashboard() {
           {getGreeting()},<br />{firstName}.
         </h1>
         <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-lg tracking-[-0.3px] mt-2">
-          Here is a summary of your executive applications and upcoming deadlines.
+          Here's a summary of your application progress.
         </p>
       </header>
 
-      {/* Applications */}
+      {/* My Application - Section Checklist */}
       <section>
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-base">
-            Your Applications
+            My Application
           </h2>
           <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">
-            {applications.length} active
+            {completedCount}/{totalSections} sections complete
+          </span>
+        </div>
+
+        <div className="border border-[#dbe0ec] bg-white">
+          {/* Progress bar */}
+          <div className="px-6 pt-6 pb-4">
+            <div className="grid grid-cols-6 gap-1">
+              {sections.map((section) => (
+                <div key={section.key} className="h-[6px] bg-[#eaeaea]">
+                  {section.complete && (
+                    <motion.div
+                      className="h-full bg-black"
+                      initial={{ width: 0 }}
+                      animate={{ width: "100%" }}
+                      transition={{ duration: 0.4, ease: "easeOut" }}
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Horizontal section checklist */}
+          <div className="px-6 pb-6">
+            <div className="grid grid-cols-6 gap-2">
+              {sections.map((section, i) => (
+                <motion.div
+                  key={section.key}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.05 }}
+                >
+                  <Link
+                    to={section.path}
+                    className="flex flex-col items-center gap-2 py-3 px-2 rounded hover:bg-[#f9f9f7] transition-colors group"
+                  >
+                    {section.complete ? (
+                      <CheckCircle2 className="w-5 h-5 text-black" />
+                    ) : (
+                      <Circle className="w-5 h-5 text-[#d0d0d0]" />
+                    )}
+                    <span
+                      className={cn(
+                        "font-['Geist_Mono',monospace] text-[11px] text-center leading-tight group-hover:underline",
+                        section.complete ? "text-black" : "text-[#6c6c6c]"
+                      )}
+                    >
+                      {section.label}
+                    </span>
+                  </Link>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* My Positions */}
+      <section>
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-base">
+            My Positions
+          </h2>
+          <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">
+            {appPositions.length} position{appPositions.length !== 1 ? "s" : ""} on my list
           </span>
         </div>
 
         <div className="border border-[#dbe0ec]">
-          {applications.map((app: any, i: number) => (
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.08 }}
-              key={app.id}
-              className={cn(
-                "flex items-center justify-between px-6 py-5 hover:bg-[#f9f9f7] transition-colors group",
-                i !== 0 && "border-t border-[#dbe0ec]"
-              )}
-            >
-              <div className="flex items-center gap-5">
-                <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] w-6">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <div>
-                  <h3 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm group-hover:underline">
-                    WOSS Robotics
-                  </h3>
-                  <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm mt-0.5">
-                    {app.positions?.title}
-                  </p>
+          {appPositions.length > 0 && (
+            <>
+              {/* Position submission progress */}
+              <div className="px-6 pt-5 pb-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm">
+                    {submittedPositionCount}/{appPositions.length} submitted
+                  </span>
+                </div>
+                <div className="w-full h-[4px] bg-[#eaeaea] rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-black rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${positionProgressPercent}%` }}
+                    transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
+                  />
                 </div>
               </div>
-              <div className="flex items-center gap-4">
-                <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] border border-[#dbe0ec] px-2.5 py-1">
-                  {STATUS_LABELS[app.status] ?? app.status}
-                </span>
-                {app.status === "draft" ? (
+
+              {/* Position list */}
+              {appPositions.map((ap: any, i: number) => (
+                <motion.div
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.08 }}
+                  key={ap.id}
+                  className={cn(
+                    "flex items-center justify-between px-6 py-5 hover:bg-[#f9f9f7] transition-colors group border-t border-[#dbe0ec]"
+                  )}
+                >
+                  <div className="flex items-center gap-5">
+                    <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] w-6">
+                      {String(i + 1).padStart(2, "0")}
+                    </span>
+                    <div>
+                      <h3 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm group-hover:underline">
+                        {ap.positions?.title}
+                      </h3>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {application?.status !== "draft" && (
+                      <CheckCircle2 className="w-3.5 h-3.5 text-black" />
+                    )}
+                    <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] border border-[#dbe0ec] px-2.5 py-1">
+                      {STATUS_LABELS[ap.status] ?? ap.status}
+                    </span>
+                  </div>
+                </motion.div>
+              ))}
+
+              <div className="px-6 py-4 border-t border-[#dbe0ec] flex items-center justify-end">
+                {application?.status === "draft" ? (
                   <Link
                     to="/applicant/review"
                     className="font-['Geist_Mono',monospace] text-[11px] text-black flex items-center gap-1 hover:underline"
                   >
                     Review & Submit <ArrowRight className="w-3 h-3" />
                   </Link>
-                ) : app.status === "submitted" ? (
+                ) : (
                   <Link
                     to="/applicant/review"
                     className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] flex items-center gap-1 hover:underline"
                   >
-                    View <ArrowRight className="w-3 h-3" />
+                    View Application <ArrowRight className="w-3 h-3" />
                   </Link>
-                ) : null}
+                )}
               </div>
-            </motion.div>
-          ))}
+            </>
+          )}
 
-          {applications.length === 0 && (
+          {appPositions.length === 0 && (
             <div className="px-6 py-16 text-center">
               <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-base mb-6">
-                You haven't started any applications yet.
+                You haven't added any positions yet.
               </p>
               <PrimaryButton to="/applicant/positions">Browse Positions</PrimaryButton>
             </div>
@@ -137,75 +299,131 @@ export function ApplicantDashboard() {
         </div>
       </section>
 
-      {/* Timeline + Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {/* Timeline */}
-        <section>
-          <h2 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-base mb-2">
-            Key Dates
-          </h2>
-          <div className="border border-[#dbe0ec]">
-            {[
-              { date: settings.application_deadline || "TBD", label: "Application Deadline", desc: "Submit all materials for the 2026-2027 cycle.", urgent: true },
-              { date: settings.interview_window || "TBD", label: "Interview Window", desc: "If selected, you will be invited to book a slot.", urgent: false },
-              { date: settings.decisions_date || "TBD", label: "Decisions Released", desc: "Check your portal for updates.", urgent: false },
-            ].map((item, i) => (
-              <div
-                key={item.label}
-                className={cn(
-                  "px-6 py-5 flex items-start gap-4",
-                  i !== 0 && "border-t border-[#dbe0ec]",
-                  !item.urgent && "opacity-60"
-                )}
-              >
-                <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] w-5 mt-0.5">
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <div>
-                  <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] mb-1">{item.date}</p>
-                  <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm">{item.label}</p>
-                  <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm mt-0.5">{item.desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+      {/* Key Dates */}
+      <section>
+        <h2 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-base mb-2">
+          Key Dates
+        </h2>
+        {(() => {
+          const keyDates = [
+            { raw: settings.application_deadline || "TBD", label: "Application Deadline", desc: "Submit all materials for the 2026-2027 cycle.", type: "deadline" as const },
+            { raw: settings.interview_window || "TBD", label: "Interview Window", desc: "If selected, you will be invited to book a slot.", type: "interview" as const },
+            { raw: settings.decisions_date || "TBD", label: "Decisions Released", desc: "Check your portal for updates.", type: "decision" as const },
+          ];
 
-        {/* Quick Actions */}
-        <section>
-          <h2 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-base mb-2">
-            Quick Actions
-          </h2>
-          <div className="border border-[#dbe0ec]">
-            <div className="px-6 py-5 border-b border-[#dbe0ec]">
-              <div className="flex items-start justify-between mb-3">
-                <div>
-                  <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm">Written Responses</p>
-                  <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm mt-1">
-                    Complete your written responses to strengthen your application.
-                  </p>
+          const tryParse = (s: string): Date | null => {
+            try {
+              const d = parseISO(s);
+              return isNaN(d.getTime()) ? null : d;
+            } catch {
+              return null;
+            }
+          };
+
+          const parsedDates = keyDates.map((kd) => ({ ...kd, parsed: tryParse(kd.raw) }));
+
+          const monthStart = startOfMonth(calendarMonth);
+          const monthEnd = endOfMonth(calendarMonth);
+          const calStart = startOfWeek(monthStart, { weekStartsOn: 0 });
+          const calEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
+          const days = eachDayOfInterval({ start: calStart, end: calEnd });
+          const dayHeaders = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+          return (
+            <div className="border border-[#dbe0ec]">
+              {/* Calendar */}
+              <div className="px-6 pt-5 pb-4">
+                {/* Month nav */}
+                <div className="flex items-center justify-between mb-4">
+                  <button
+                    onClick={() => setCalendarMonth((m) => subMonths(m, 1))}
+                    className="text-[#6c6c6c] hover:text-black transition-colors p-1"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm">
+                    {format(calendarMonth, "MMMM yyyy")}
+                  </span>
+                  <button
+                    onClick={() => setCalendarMonth((m) => addMonths(m, 1))}
+                    className="text-[#6c6c6c] hover:text-black transition-colors p-1"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
-                <PenTool className="w-4 h-4 text-[#6c6c6c] shrink-0 mt-0.5" />
+
+                {/* Day headers */}
+                <div className="grid grid-cols-7 mb-1">
+                  {dayHeaders.map((dh) => (
+                    <div key={dh} className="text-center font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.06em] py-1">
+                      {dh}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Day grid */}
+                <div className="grid grid-cols-7">
+                  {days.map((day) => {
+                    const inMonth = isSameMonth(day, calendarMonth);
+                    const today = isToday(day);
+                    const matchingDates = parsedDates.filter((pd) => pd.parsed && isSameDay(day, pd.parsed));
+                    const isInterviewDay = matchingDates.some((m) => m.type === "interview");
+                    const isDeadlineDay = matchingDates.some((m) => m.type === "deadline");
+                    const isDecisionDay = matchingDates.some((m) => m.type === "decision");
+                    const tooltipLabel = matchingDates.map((m) => m.label).join(", ");
+
+                    return (
+                      <div
+                        key={day.toISOString()}
+                        className={cn(
+                          "w-full aspect-square flex flex-col items-center justify-center text-[13px] font-['Geist_Mono',monospace] relative",
+                          !inMonth && "text-[#d0d0d0]",
+                          inMonth && "text-black",
+                          today && "border border-black",
+                          isDeadlineDay && inMonth && "bg-black text-white",
+                          isDecisionDay && inMonth && "bg-[#333] text-white",
+                          isInterviewDay && inMonth && "bg-[#e8e8e8] border-l-2 border-l-black"
+                        )}
+                        title={tooltipLabel || undefined}
+                      >
+                        <span>{format(day, "d")}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-              <PrimaryButton to="/applicant/responses">Continue Responses</PrimaryButton>
+
+              {/* Legend */}
+              <div className="border-t border-[#dbe0ec]">
+                {parsedDates.map((item, i) => (
+                  <div
+                    key={item.label}
+                    className={cn(
+                      "px-6 py-3 flex items-start gap-3",
+                      i !== 0 && "border-t border-[#dbe0ec]"
+                    )}
+                  >
+                    <div className="mt-1.5 shrink-0">
+                      {item.type === "deadline" ? (
+                        <span className="block w-[10px] h-[10px] bg-black" />
+                      ) : item.type === "decision" ? (
+                        <span className="block w-[10px] h-[10px] bg-[#333]" />
+                      ) : (
+                        <span className="block w-[10px] h-[10px] bg-[#e8e8e8] border-l-2 border-l-black border border-[#d0d0d0]" />
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] mb-0.5">{item.raw}</p>
+                      <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm">{item.label}</p>
+                      <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm mt-0.5">{item.desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="px-6 py-5">
-              <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm mb-1">
-                Not applied yet?
-              </p>
-              <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm mb-3">
-                Browse all available executive positions for 2026-2027.
-              </p>
-              <Link
-                to="/applicant/positions"
-                className="font-['Geist_Mono',monospace] text-[12px] text-black border-b border-black hover:opacity-70 transition-opacity"
-              >
-                Browse positions →
-              </Link>
-            </div>
-          </div>
-        </section>
-      </div>
+          );
+        })()}
+      </section>
     </div>
   );
 }

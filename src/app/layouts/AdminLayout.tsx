@@ -8,6 +8,7 @@ import {
   BarChart,
   LogOut,
   PenTool,
+  FileText,
 } from "lucide-react";
 
 const ADMIN_NAV = [
@@ -15,7 +16,8 @@ const ADMIN_NAV = [
   { path: "/admin/interviews", icon: Calendar, label: "Interviews", num: "02" },
   { path: "/admin/communications", icon: MessageSquare, label: "Communications", num: "03" },
   { path: "/admin/questions", icon: PenTool, label: "Questions", num: "04" },
-  { path: "/admin/settings", icon: Settings, label: "Settings", num: "05" },
+  { path: "/admin/responses", icon: FileText, label: "Responses", num: "05" },
+  { path: "/admin/settings", icon: Settings, label: "Settings", num: "06" },
 ];
 
 export function AdminLayout() {

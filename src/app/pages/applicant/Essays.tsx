@@ -1,22 +1,33 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { useAuth } from "../../lib/AuthContext";
-import { useQuestions, useApplications } from "../../lib/hooks";
+import { useQuestions, useApplication, useSettings } from "../../lib/hooks";
 import { supabase } from "../../lib/supabase";
 import { cn } from "../../lib/utils";
 
 export function ApplicantEssays() {
   const { profile } = useAuth();
   const { questions, loading: qLoading } = useQuestions();
-  const { applications, loading: appsLoading } = useApplications(profile?.id);
+  const { application, loading: appsLoading } = useApplication(profile?.id);
+  const isSubmitted = application && application.status !== "draft";
+  const { settings } = useSettings();
   const navigate = useNavigate();
+
+  // Per-question limit_mode; fall back to global setting for older questions
+  const getQuestionLimitMode = (q: any): "characters" | "words" =>
+    q.limit_mode === "words" ? "words" : q.limit_mode === "characters" ? "characters" : (settings.limit_mode === "words" ? "words" : "characters");
 
   // responses keyed by `${applicationId}:${questionId}`
   const [responses, setResponses] = useState<Record<string, string>>({});
   const [savingState, setSavingState] = useState<"idle" | "saving" | "saved">("idle");
   const [loaded, setLoaded] = useState(false);
+  const responsesRef = useRef(responses);
+
+  useEffect(() => { responsesRef.current = responses; }, [responses]);
+
+  const appPositions: any[] = application?.application_positions || [];
 
   // Separate general vs position-specific questions
   const generalQuestions = questions.filter((q: any) => !q.position_id);
@@ -28,17 +39,16 @@ export function ApplicantEssays() {
     }
   }
 
-  // Load all responses across all applications
+  // Load all responses for the single application
   useEffect(() => {
     if (appsLoading || qLoading) return;
-    if (applications.length === 0) { setLoaded(true); return; }
+    if (!application) { setLoaded(true); return; }
 
     const loadAll = async () => {
-      const appIds = applications.map((a: any) => a.id);
       const { data, error } = await supabase
         .from("responses")
         .select("application_id, question_id, content")
-        .in("application_id", appIds);
+        .eq("application_id", application.id);
       if (error) console.error("Failed to fetch responses:", error);
       const map: Record<string, string> = {};
       (data || []).forEach((r: any) => {
@@ -48,7 +58,7 @@ export function ApplicantEssays() {
       setLoaded(true);
     };
     loadAll();
-  }, [appsLoading, qLoading, applications.map((a: any) => a.id).join(",")]);
+  }, [appsLoading, qLoading, application?.id]);
 
   const saveResponse = useCallback(
     async (applicationId: string, questionId: string, content: string) => {
@@ -73,36 +83,57 @@ export function ApplicantEssays() {
     []
   );
 
+  const saveAll = useCallback(async (responsesToSave: Record<string, string>) => {
+    if (!application) return;
+    for (const [key, content] of Object.entries(responsesToSave)) {
+      const [appId, qId] = key.split(":");
+      if (!appId || !qId) continue;
+      await saveResponse(appId, qId, content);
+    }
+  }, [application, saveResponse]);
+
   const handleChange = (applicationId: string, questionId: string, content: string) => {
     const key = `${applicationId}:${questionId}`;
     setResponses((prev) => ({ ...prev, [key]: content }));
     setSavingState("saving");
   };
 
-  // For general questions: save response to ALL applications
+  // For general questions: save response to the single application
   const handleGeneralChange = (questionId: string, content: string) => {
+    if (!application) return;
     const newResponses = { ...responses };
-    for (const app of applications) {
-      newResponses[`${app.id}:${questionId}`] = content;
-    }
+    newResponses[`${application.id}:${questionId}`] = content;
     setResponses(newResponses);
     setSavingState("saving");
   };
 
   // Auto-save with debounce
   useEffect(() => {
-    if (savingState !== "saving") return;
+    if (isSubmitted || savingState !== "saving") return;
     const timer = setTimeout(async () => {
-      if (applications.length === 0) return;
-      for (const [key, content] of Object.entries(responses)) {
-        const [appId, qId] = key.split(":");
-        if (!appId || !qId) continue;
-        await saveResponse(appId, qId, content);
-      }
+      await saveAll(responsesRef.current);
       setSavingState("saved");
     }, 1000);
     return () => clearTimeout(timer);
-  }, [savingState, responses, applications.length]);
+  }, [savingState, saveAll, isSubmitted]);
+
+  // Save on visibility change (tab switch)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "hidden") {
+        saveAll(responsesRef.current);
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [saveAll]);
+
+  const getCount = (content: string, mode: "characters" | "words") => {
+    if (mode === "words") {
+      return content.trim() ? content.trim().split(/\s+/).length : 0;
+    }
+    return content.length;
+  };
 
   if (qLoading || appsLoading || !loaded) {
     return (
@@ -112,7 +143,7 @@ export function ApplicantEssays() {
     );
   }
 
-  if (applications.length === 0) {
+  if (!application) {
     return (
       <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <header className="border-b border-[#dbe0ec] pb-8">
@@ -134,10 +165,12 @@ export function ApplicantEssays() {
   const renderQuestion = (q: any, idx: number, applicationId: string, isGeneral: boolean) => {
     const key = `${applicationId}:${q.id}`;
     const content = responses[key] || "";
-    const charCount = content.length;
+    const qLimitMode = getQuestionLimitMode(q);
+    const count = getCount(content, qLimitMode);
     const limit = q.char_limit || 2000;
-    const isNearLimit = charCount > limit * 0.9;
-    const isOverLimit = charCount > limit;
+    const limitLabel = qLimitMode === "words" ? "words" : "chars";
+    const isNearLimit = count > limit * 0.9;
+    const isOverLimit = count > limit;
 
     return (
       <motion.div
@@ -170,23 +203,26 @@ export function ApplicantEssays() {
               className={cn(
                 "w-full border bg-[#f9f9f7] px-5 py-4 font-['Source_Serif_4',serif] text-base text-black leading-relaxed tracking-[-0.2px] resize-y outline-none transition-colors placeholder-[#6c6c6c]",
                 q.type === "short_text" ? "min-h-[80px]" : "min-h-[200px]",
-                isOverLimit ? "border-black" : "border-[#dbe0ec] focus:border-black"
+                isOverLimit ? "border-red-400" : "border-[#dbe0ec] focus:border-black",
+                isSubmitted && "opacity-60 cursor-not-allowed"
               )}
               value={content}
               onChange={(e) => isGeneral ? handleGeneralChange(q.id, e.target.value) : handleChange(applicationId, q.id, e.target.value)}
               placeholder="Start writing here..."
+              disabled={!!isSubmitted}
             />
             <div className="flex justify-end mt-2">
-              <span className={cn("font-['Geist_Mono',monospace] text-[11px]", isOverLimit || isNearLimit ? "text-black" : "text-[#6c6c6c]")}>
-                {charCount} / {limit}
+              <span className={cn("font-['Geist_Mono',monospace] text-[11px]", isOverLimit ? "text-red-500" : isNearLimit ? "text-black" : "text-[#6c6c6c]")}>
+                {count} / {limit} {limitLabel}
               </span>
             </div>
           </>
         ) : q.type === "select" ? (
           <select
-            className="w-full border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4 font-['Radio_Canada_Big',sans-serif] text-sm text-black outline-none focus:border-black transition-colors"
+            className={cn("w-full border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4 font-['Radio_Canada_Big',sans-serif] text-sm text-black outline-none focus:border-black transition-colors", isSubmitted && "opacity-60 cursor-not-allowed")}
             value={content}
             onChange={(e) => isGeneral ? handleGeneralChange(q.id, e.target.value) : handleChange(applicationId, q.id, e.target.value)}
+            disabled={!!isSubmitted}
           >
             <option value="">Select an option...</option>
             {(q.options || []).map((opt: string) => (
@@ -208,6 +244,7 @@ export function ApplicantEssays() {
                     type="checkbox"
                     className="sr-only"
                     checked={isChecked}
+                    disabled={!!isSubmitted}
                     onChange={() => {
                       const newVal = isChecked ? selected.filter((s) => s !== opt).join(",") : [...selected, opt].join(",");
                       isGeneral ? handleGeneralChange(q.id, newVal) : handleChange(applicationId, q.id, newVal);
@@ -219,19 +256,21 @@ export function ApplicantEssays() {
           </div>
         ) : q.type === "number" ? (
           <input
-            type="number"
-            className="w-full border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4 font-['Geist_Mono',monospace] text-base text-black outline-none focus:border-black transition-colors placeholder-[#6c6c6c]"
+            type="text"
+            inputMode="numeric"
+            className={cn("w-full border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4 font-['Geist_Mono',monospace] text-base text-black outline-none focus:border-black transition-colors placeholder-[#6c6c6c]", isSubmitted && "opacity-60 cursor-not-allowed")}
             value={content}
-            onChange={(e) => isGeneral ? handleGeneralChange(q.id, e.target.value) : handleChange(applicationId, q.id, e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value.replace(/[^0-9.-]/g, "");
+              isGeneral ? handleGeneralChange(q.id, val) : handleChange(applicationId, q.id, val);
+            }}
             placeholder="0"
+            disabled={!!isSubmitted}
           />
         ) : null}
       </motion.div>
     );
   };
-
-  // Use first application for general question responses display
-  const primaryApp = applications[0];
 
   return (
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-24">
@@ -273,6 +312,12 @@ export function ApplicantEssays() {
         </div>
       </header>
 
+      {isSubmitted && (
+        <div className="border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4">
+          <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">Your application has been submitted. This section is locked.</p>
+        </div>
+      )}
+
       {/* General Questions */}
       {generalQuestions.length > 0 && (
         <section>
@@ -286,25 +331,25 @@ export function ApplicantEssays() {
             </span>
           </div>
           <div className="border border-[#dbe0ec]">
-            {generalQuestions.map((q: any, idx: number) => renderQuestion(q, idx, primaryApp.id, true))}
+            {generalQuestions.map((q: any, idx: number) => renderQuestion(q, idx, application.id, true))}
           </div>
         </section>
       )}
 
       {/* Position-specific Questions */}
-      {applications.map((app: any, appIdx: number) => {
-        const posQuestions = positionQuestionMap[app.position_id] || [];
+      {appPositions.map((ap: any) => {
+        const posQuestions = positionQuestionMap[ap.position_id] || [];
         if (posQuestions.length === 0) return null;
 
         return (
-          <section key={app.id}>
+          <section key={ap.id}>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <p className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.08em] mb-1">
                   Position-Specific
                 </p>
                 <h2 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-base">
-                  {app.positions?.title}
+                  {ap.positions?.title}
                 </h2>
               </div>
               <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] border border-[#dbe0ec] px-2.5 py-1">
@@ -312,14 +357,14 @@ export function ApplicantEssays() {
               </span>
             </div>
             <div className="border border-[#dbe0ec]">
-              {posQuestions.map((q: any, idx: number) => renderQuestion(q, idx, app.id, false))}
+              {posQuestions.map((q: any, idx: number) => renderQuestion(q, idx, application.id, false))}
             </div>
           </section>
         );
       })}
 
-      {/* No position-specific questions notice */}
-      {applications.every((app: any) => !(positionQuestionMap[app.position_id]?.length > 0)) && generalQuestions.length === 0 && (
+      {/* No questions notice */}
+      {appPositions.every((ap: any) => !(positionQuestionMap[ap.position_id]?.length > 0)) && generalQuestions.length === 0 && (
         <div className="border border-dashed border-[#dbe0ec] p-16 text-center">
           <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-base">
             No questions have been added yet. Check back later.

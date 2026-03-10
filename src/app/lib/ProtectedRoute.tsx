@@ -1,4 +1,4 @@
-import { Navigate } from "react-router";
+import { Navigate, useLocation } from "react-router";
 import { useAuth } from "./AuthContext";
 import { Loader2 } from "lucide-react";
 
@@ -10,6 +10,7 @@ export function ProtectedRoute({
   requiredRole?: "applicant" | "admin";
 }) {
   const { user, profile, loading, profileError } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -58,6 +59,15 @@ export function ProtectedRoute({
 
   if (requiredRole && profile.role !== requiredRole) {
     return <Navigate to={profile.role === "admin" ? "/admin" : "/applicant"} replace />;
+  }
+
+  // Force onboarding for applicants who haven't completed their profile
+  if (
+    requiredRole === "applicant" &&
+    location.pathname !== "/onboarding" &&
+    (!profile.first_name || !profile.last_name || !profile.grade)
+  ) {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return <>{children}</>;

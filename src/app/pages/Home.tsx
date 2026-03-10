@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router";
 import { useAuth } from "../lib/AuthContext";
 import { usePositions } from "../lib/hooks";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowRight } from "lucide-react";
 
 function PrimaryButton({ to, children }: { to: string; children: React.ReactNode }) {
   return (
@@ -15,10 +15,6 @@ function PrimaryButton({ to, children }: { to: string; children: React.ReactNode
       </span>
     </Link>
   );
-}
-
-function NavDot() {
-  return <div className="w-1.5 h-1.5 rounded-full bg-black" />;
 }
 
 export function Home() {
@@ -35,8 +31,19 @@ export function Home() {
 
       {/* Minimal Nav */}
       <nav className="relative z-10 flex items-center justify-between px-8 py-6 max-w-6xl mx-auto w-full">
-        <div className="flex items-center gap-2">
-          <NavDot />
+        <div className="flex items-center gap-3">
+          {/* Logo placeholder - replace src with actual logo */}
+          <img
+            src="/logo.png"
+            alt="WOSS Robotics"
+            className="h-8 w-8 object-contain"
+            onError={(e) => {
+              // Fallback to dot if logo not found
+              (e.target as HTMLImageElement).style.display = "none";
+              (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
+            }}
+          />
+          <div className="w-2 h-2 bg-black hidden" />
           <span className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm tracking-tight">
             WOSS Robotics
           </span>
@@ -127,23 +134,26 @@ export function Home() {
                 positions.map((pos: any, i: number) => (
                   <div
                     key={pos.id}
-                    className="flex items-center justify-between px-6 py-4 hover:bg-[#f9f9f7] transition-colors cursor-pointer"
+                    className="flex items-center justify-between px-6 py-4 hover:bg-[#f9f9f7] transition-colors cursor-pointer group"
                     onClick={() => navigate(user ? "/applicant/positions" : "/login")}
                   >
-                    <div className="flex items-center gap-4">
-                      <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">
+                    <div className="flex items-center gap-4 flex-1 min-w-0">
+                      <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] shrink-0 w-8">
                         {String(i + 1).padStart(3, "0")}
                       </span>
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm">{pos.title}</p>
                         {pos.description && (
-                          <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-xs">{pos.description}</p>
+                          <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-xs mt-0.5 truncate">{pos.description}</p>
                         )}
                       </div>
                     </div>
-                    <span className={`font-['Geist_Mono',monospace] text-[11px] border px-2 py-0.5 ${pos.is_open ? "text-black border-black" : "text-[#6c6c6c] border-[#dbe0ec]"}`}>
-                      {pos.is_open ? "Open" : "Closed"}
-                    </span>
+                    <div className="flex items-center gap-3 shrink-0 ml-4">
+                      <span className={`font-['Geist_Mono',monospace] text-[11px] border px-2 py-0.5 ${pos.is_open ? "text-black border-black" : "text-[#6c6c6c] border-[#dbe0ec]"}`}>
+                        {pos.is_open ? "Open" : "Closed"}
+                      </span>
+                      <ArrowRight className="w-3.5 h-3.5 text-[#6c6c6c] opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
                   </div>
                 ))
               )}
@@ -181,8 +191,13 @@ export function Home() {
 
       {/* Footer */}
       <footer className="relative z-10 border-t border-[#dbe0ec] px-8 py-6 flex items-center justify-between max-w-6xl mx-auto w-full">
-        <div className="flex items-center gap-2">
-          <NavDot />
+        <div className="flex items-center gap-3">
+          <img
+            src="/logo.png"
+            alt=""
+            className="h-6 w-6 object-contain"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+          />
           <span className="font-['Radio_Canada_Big',sans-serif] text-sm text-black">WOSS Robotics</span>
         </div>
         <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">© 2026</p>

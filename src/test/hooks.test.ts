@@ -32,7 +32,7 @@ vi.mock('../app/lib/supabase', () => ({
 }));
 
 // Import hooks AFTER mock setup
-const { useSettings, usePositions, useQuestions, useApplications, useAllApplications } = await import('../app/lib/hooks');
+const { useSettings, usePositions, useQuestions, useApplication, useAllApplications } = await import('../app/lib/hooks');
 
 describe('useSettings', () => {
   beforeEach(() => {
@@ -193,31 +193,32 @@ describe('useQuestions', () => {
   });
 });
 
-describe('useApplications', () => {
+describe('useApplication', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('returns empty and stops loading when no userId', async () => {
-    const { result } = renderHook(() => useApplications(undefined));
+  it('returns null and stops loading when no userId', async () => {
+    const { result } = renderHook(() => useApplication(undefined));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(result.current.applications).toEqual([]);
+    expect(result.current.application).toBeNull();
   });
 
-  it('fetches applications for a given user', async () => {
+  it('fetches single application for a given user', async () => {
     const chain = createChain({
-      data: [{ id: 'a1', status: 'submitted', user_id: 'user1' }],
+      data: { id: 'a1', status: 'submitted', user_id: 'user1', application_positions: [] },
       error: null,
     });
     mockFrom.mockReturnValue(chain);
 
-    const { result } = renderHook(() => useApplications('user1'));
+    const { result } = renderHook(() => useApplication('user1'));
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    expect(result.current.applications).toHaveLength(1);
+    expect(result.current.application).toBeTruthy();
+    expect(result.current.application.id).toBe('a1');
     expect(mockFrom).toHaveBeenCalledWith('applications');
     expect(mockEq).toHaveBeenCalledWith('user_id', 'user1');
   });
@@ -231,7 +232,7 @@ describe('useAllApplications', () => {
   it('fetches all applications with joined data', async () => {
     const chain = createChain({
       data: [
-        { id: 'a1', status: 'submitted', profiles: { first_name: 'John' }, positions: { title: 'VP' } },
+        { id: 'a1', status: 'submitted', profiles: { first_name: 'John' }, application_positions: [{ id: 'ap1', positions: { title: 'VP' } }] },
       ],
       error: null,
     });

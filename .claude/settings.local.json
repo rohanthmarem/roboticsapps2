@@ -18,7 +18,37 @@
       "Bash(npx tsc:*)",
       "Bash(ls:*)",
       "Bash(supabase projects:*)",
-      "Bash(where npx:*)"
+      "Bash(where npx:*)",
+      "Bash(curl:*)",
+      "Bash(find /c/Users/Rohan/Downloads/roboticsapps2 -maxdepth 2 -name \"*.json\" -o -name \"*.config.*\" 2>/dev/null | grep -v node_modules | head -20)",
+      "Bash(vercel whoami:*)",
+      "Bash(vercel --yes 2>&1)",
+      "Bash(vercel domains:*)",
+      "Bash(echo \"https://yjagjtvgceatyopsnihl.supabase.co\" | vercel env add VITE_SUPABASE_URL production 2>&1)",
+      "Bash(echo \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlqYWdqdHZnY2VhdHlvcHNuaWhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI5MzMyNjUsImV4cCI6MjA4ODUwOTI2NX0.0HsoPpyrtv_nXKhaWvMg2B2JJFh-do9wFZOxfFheg8s\" | vercel env add VITE_SUPABASE_ANON_KEY production 2>&1)",
+      "Bash(find /c/Users/Rohan/Downloads/roboticsapps2/src -type f \\\\\\( -name \"*.ts\" -o -name \"*.tsx\" -o -name \"*.js\" -o -name \"*.jsx\" -o -name \"*.json\" \\\\\\) 2>/dev/null | sort)",
+      "Bash(find /c/Users/Rohan/Downloads/roboticsapps2 -path \"*/node_modules\" -prune -o -type f \\\\\\( -name \"*.sql\" -o -name \"*.json\" \\\\\\) -print 2>/dev/null | grep -E \"\\(supabase|package\\\\.json|tsconfig|vite\\)\" | head -20)",
+      "Bash(ls \"C:/Users/Rohan/Downloads/roboticsapps2/src/app/pages/applicant/Activities.tsx\" 2>/dev/null; echo \"EXIT:$?\")",
+      "Bash(ls \"C:/Users/Rohan/Downloads/roboticsapps2/src/app/pages/applicant/Essays.tsx\" 2>/dev/null; echo \"EXIT:$?\")",
+      "Bash(echo \"https://yjagjtvgceatyopsnihl.supabase.co\" | npx vercel env add VITE_SUPABASE_URL production 2>&1)",
+      "Bash(npx vercel:*)",
+      "Bash(cd C:/Users/Rohan/Downloads/roboticsapps2 && vercel --prod 2>&1)",
+      "Bash(supabase db:*)",
+      "Bash(vercel --prod 2>&1)",
+      "Bash(npx --no-install tsc --noEmit --pretty 2>&1 | head -40)",
+      "Bash(cd C:/Users/Rohan/Downloads/roboticsapps2 && node node_modules/.bin/vite build 2>&1 | tail -20)",
+      "Bash(cd \"C:\\\\Users\\\\Rohan\\\\Downloads\\\\roboticsapps2\" && npx --no-install tsc --noEmit 2>&1 | head -30)",
+      "Bash(cd \"C:\\\\Users\\\\Rohan\\\\Downloads\\\\roboticsapps2\" && node_modules/.bin/vite build 2>&1 | tail -20)",
+      "Bash(find /c/Users/Rohan/Downloads/roboticsapps2 -type f -name \"*.env*\" 2>/dev/null | head -20)",
+      "Bash(find /c/Users/Rohan/Downloads/roboticsapps2 -type f -name \"package.json\" | head -1 | xargs cat | grep -A 10 -B 2 \"resend\\\\|email\")",
+      "Bash(find /c/Users/Rohan/Downloads/roboticsapps2 -type f \\\\\\( -name \"*.md\" -o -name \"README*\" -o -name \"*.txt\" \\\\\\) 2>/dev/null | head -10)",
+      "Bash(cd \"C:\\\\Users\\\\Rohan\\\\Downloads\\\\roboticsapps2\" && npx -p typescript tsc --noEmit --pretty 2>&1 | head -40)",
+      "Bash(cd \"C:\\\\Users\\\\Rohan\\\\Downloads\\\\roboticsapps2\" && ./node_modules/.bin/tsc --noEmit 2>&1 | head -40)",
+      "Bash(cat /c/Users/Rohan/Downloads/service-account.json | tr -d '\\\\n' | xargs -0 -I {} npx supabase secrets set \"GOOGLE_SERVICE_ACCOUNT_JSON={}\" 2>&1)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "supabase"
+  ]
 }

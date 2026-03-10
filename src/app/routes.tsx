@@ -3,6 +3,7 @@ import { createBrowserRouter } from "react-router";
 import { Home } from "./pages/Home";
 import { Login } from "./pages/Login";
 import { AuthConfirm } from "./pages/AuthConfirm";
+import { Onboarding } from "./pages/Onboarding";
 import { ApplicantLayout } from "./layouts/ApplicantLayout";
 import { AdminLayout } from "./layouts/AdminLayout";
 import { ProtectedRoute } from "./lib/ProtectedRoute";
@@ -25,6 +26,7 @@ import { AdminSettings } from "./pages/admin/Settings";
 import { AdminCommunications } from "./pages/admin/Communications";
 import { AdminInterviews } from "./pages/admin/Interviews";
 import { AdminQuestions } from "./pages/admin/Questions";
+import { AdminResponses } from "./pages/admin/Responses";
 
 export const router = createBrowserRouter([
   {
@@ -38,6 +40,14 @@ export const router = createBrowserRouter([
   {
     path: "/auth/confirm",
     Component: AuthConfirm,
+  },
+  {
+    path: "/onboarding",
+    element: (
+      <ProtectedRoute requiredRole="applicant">
+        <Onboarding />
+      </ProtectedRoute>
+    ),
   },
   {
     path: "/applicant",
@@ -72,6 +82,7 @@ export const router = createBrowserRouter([
       { path: "communications", Component: AdminCommunications },
       { path: "interviews", Component: AdminInterviews },
       { path: "questions", Component: AdminQuestions },
+      { path: "responses", Component: AdminResponses },
     ],
   },
 ]);

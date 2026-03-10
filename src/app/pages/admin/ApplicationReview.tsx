@@ -5,6 +5,17 @@ import { supabase } from "../../lib/supabase";
 import { useAuth } from "../../lib/AuthContext";
 import { STATUS_LABELS } from "../../data";
 import { cn } from "../../lib/utils";
+import { genericNotificationEmail, acceptanceEmail, rejectionEmail } from "../../lib/email-templates";
+
+const POSITION_STATUSES = ["pending", "interview_scheduled", "accepted", "rejected"] as const;
+type PositionStatus = (typeof POSITION_STATUSES)[number];
+
+const POSITION_STATUS_LABELS: Record<string, string> = {
+  pending: "Pending",
+  interview_scheduled: "Interview",
+  accepted: "Accepted",
+  rejected: "Declined",
+};
 
 export function AdminApplicationReview() {
   const { id } = useParams();
@@ -20,6 +31,8 @@ export function AdminApplicationReview() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [allReviews, setAllReviews] = useState<any[]>([]);
+  const [updatingPositionId, setUpdatingPositionId] = useState<string | null>(null);
 
   const RUBRIC = [
     { id: "experience", label: "Relevant Experience" },
@@ -30,10 +43,10 @@ export function AdminApplicationReview() {
 
   useEffect(() => {
     const fetchData = async () => {
-      // Fetch application with position
+      // Fetch application with positions via junction table
       const { data: app } = await supabase
         .from("applications")
-        .select("*, positions(title)")
+        .select("*, application_positions(*, positions(title, description, spots))")
         .eq("id", id)
         .single();
       setApplication(app);
@@ -70,17 +83,20 @@ export function AdminApplicationReview() {
           .order("sort_order");
         setHonors(hons || []);
 
-        // Fetch existing review
-        if (adminProfile) {
-          const { data: review } = await supabase
-            .from("reviews")
-            .select("*")
-            .eq("application_id", app.id)
-            .eq("reviewer_id", adminProfile.id)
-            .single();
-          if (review) {
-            setScores(review.scores || {});
-            setNotes(review.notes || "");
+        // Fetch all reviews for this application
+        const { data: allRevs } = await supabase
+          .from("reviews")
+          .select("*, profiles:reviewer_id(first_name, last_name, email)")
+          .eq("application_id", app.id)
+          .order("updated_at", { ascending: false });
+        setAllReviews(allRevs || []);
+
+        // Set current admin's scores/notes into edit state
+        if (adminProfile && allRevs) {
+          const myReview = allRevs.find((r: any) => r.reviewer_id === adminProfile.id);
+          if (myReview) {
+            setScores(myReview.scores || {});
+            setNotes(myReview.notes || "");
           }
         }
       }
@@ -131,6 +147,14 @@ export function AdminApplicationReview() {
       }
     }
 
+    // Refetch all reviews so the list stays current
+    const { data: allRevs } = await supabase
+      .from("reviews")
+      .select("*, profiles:reviewer_id(first_name, last_name, email)")
+      .eq("application_id", application.id)
+      .order("updated_at", { ascending: false });
+    setAllReviews(allRevs || []);
+
     setSaving(false);
   };
 
@@ -147,6 +171,61 @@ export function AdminApplicationReview() {
       return;
     }
     setApplication({ ...application, status });
+
+    // Send status update email
+    if (applicantProfile?.email) {
+      const firstName = applicantProfile.first_name || "Applicant";
+      const portalUrl = window.location.origin + "/applicant";
+      const positionNames = appliedPositions.map((ap: any) => ap.positions?.title).filter(Boolean).join(", ") || "Executive Position";
+      let emailHtml: string | null = null;
+      let emailSubject = "";
+
+      if (status === "under_review") {
+        emailSubject = "Application Under Review — WOSS Robotics";
+        emailHtml = genericNotificationEmail(firstName, "Application Under Review",
+          `Your application for ${positionNames} is now being reviewed by our team. We will notify you of any updates.\n\nThank you for your patience.`, portalUrl);
+      } else if (status === "interview_scheduled") {
+        emailSubject = `Interview Invitation — ${positionNames}`;
+        emailHtml = genericNotificationEmail(firstName, "You've Been Invited to Interview!",
+          `Congratulations! You have been selected for an interview for ${positionNames}.\n\nPlease visit the portal to book your interview slot. We look forward to meeting you!`, portalUrl + "/interview");
+      } else if (status === "accepted") {
+        emailSubject = `Congratulations! — ${positionNames}`;
+        emailHtml = acceptanceEmail(firstName, positionNames, portalUrl + "/decisions");
+      } else if (status === "rejected") {
+        emailSubject = `Application Update — ${positionNames}`;
+        emailHtml = rejectionEmail(firstName, positionNames, portalUrl + "/decisions");
+      }
+
+      if (emailHtml) {
+        supabase.functions.invoke("send-email", {
+          body: { to: applicantProfile.email, subject: emailSubject, html: emailHtml },
+        }).catch(console.error);
+      }
+    }
+  };
+
+  const handleUpdatePositionStatus = async (applicationPositionId: string, status: PositionStatus) => {
+    if (!application) return;
+    setError(null);
+    setUpdatingPositionId(applicationPositionId);
+
+    const { error: err } = await supabase
+      .from("application_positions")
+      .update({ status })
+      .eq("id", applicationPositionId);
+
+    if (err) {
+      console.error("Failed to update position status:", err);
+      setError(`Failed to update position status: ${err.message}`);
+    } else {
+      setApplication({
+        ...application,
+        application_positions: application.application_positions.map((ap: any) =>
+          ap.id === applicationPositionId ? { ...ap, status } : ap
+        ),
+      });
+    }
+    setUpdatingPositionId(null);
   };
 
   if (loading) {
@@ -165,6 +244,12 @@ export function AdminApplicationReview() {
     ? `${applicantProfile.first_name || ""} ${applicantProfile.last_name || ""}`.trim() || applicantProfile.email
     : "Unknown";
 
+  const appliedPositions: any[] = application.application_positions || [];
+  const positionTitles = appliedPositions
+    .map((ap: any) => ap.positions?.title)
+    .filter(Boolean)
+    .join(", ");
+
   return (
     <div className="h-[calc(100vh-3.5rem)] flex flex-col -m-8">
       {/* Header */}
@@ -176,7 +261,7 @@ export function AdminApplicationReview() {
           <div className="flex items-center gap-3">
             <h1 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm">{applicantName}</h1>
             <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c]">
-              {application.positions?.title} · {applicantProfile?.grade || ""}
+              {positionTitles || "No positions"} · {applicantProfile?.grade || ""}
             </span>
             <span className="font-['Geist_Mono',monospace] text-[10px] border border-[#6c6c6c] text-[#6c6c6c] px-2 py-0.5">
               {STATUS_LABELS[application.status] || application.status}
@@ -201,7 +286,7 @@ export function AdminApplicationReview() {
                   { label: "Name", value: applicantName },
                   { label: "Grade", value: applicantProfile?.grade || "—" },
                   { label: "Email", value: applicantProfile?.email || "—" },
-                  { label: "Applied Position", value: application.positions?.title || "—" },
+                  { label: "Applied Positions", value: positionTitles || "—" },
                   { label: "Student Number", value: applicantProfile?.student_number || "—" },
                   { label: "Phone", value: applicantProfile?.phone || "—" },
                 ].map((item) => (
@@ -213,12 +298,67 @@ export function AdminApplicationReview() {
               </div>
             </section>
 
+            {/* Positions */}
+            {appliedPositions.length > 0 && (
+              <section className="bg-white border border-[#dbe0ec]">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-[#dbe0ec]">
+                  <p className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.08em]">Positions Applied</p>
+                  <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c]">002</span>
+                </div>
+                {appliedPositions.map((ap: any, i: number) => (
+                  <div key={ap.id} className={cn("px-6 py-5", i !== 0 && "border-t border-[#dbe0ec]")}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm mb-1">
+                          {ap.positions?.title || "Unknown Position"}
+                        </p>
+                        {ap.positions?.description && (
+                          <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm leading-[1.5]">{ap.positions.description}</p>
+                        )}
+                      </div>
+                      <span className={cn(
+                        "font-['Geist_Mono',monospace] text-[10px] border px-2 py-0.5 shrink-0",
+                        ap.status === "accepted" ? "bg-black border-black text-white" :
+                        ap.status === "rejected" ? "border-[#dbe0ec] text-[#6c6c6c] line-through" :
+                        "border-[#6c6c6c] text-[#6c6c6c]"
+                      )}>
+                        {POSITION_STATUS_LABELS[ap.status] || ap.status}
+                      </span>
+                    </div>
+                    {/* Position decision controls — only show when application is accepted */}
+                    {application.status === "accepted" && (
+                      <div className="mt-3 flex items-center gap-1.5">
+                        {POSITION_STATUSES.map((status) => (
+                          <button
+                            key={status}
+                            disabled={updatingPositionId === ap.id}
+                            onClick={() => handleUpdatePositionStatus(ap.id, status)}
+                            className={cn(
+                              "px-2.5 py-1 border font-['Geist_Mono',monospace] text-[10px] transition-colors",
+                              ap.status === status
+                                ? "bg-black border-black text-white"
+                                : "border-[#dbe0ec] text-[#6c6c6c] hover:border-black hover:text-black"
+                            )}
+                          >
+                            {POSITION_STATUS_LABELS[status]}
+                          </button>
+                        ))}
+                        {updatingPositionId === ap.id && (
+                          <Loader2 className="w-3 h-3 animate-spin text-[#6c6c6c] ml-1" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </section>
+            )}
+
             {/* Activities */}
             {activities.length > 0 && (
               <section className="bg-white border border-[#dbe0ec]">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-[#dbe0ec]">
                   <p className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.08em]">Activities</p>
-                  <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c]">002</span>
+                  <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c]">003</span>
                 </div>
                 {activities.map((act, i) => (
                   <div key={act.id} className={cn("px-6 py-5", i !== 0 && "border-t border-[#dbe0ec]")}>
@@ -239,7 +379,7 @@ export function AdminApplicationReview() {
               <section className="bg-white border border-[#dbe0ec]">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-[#dbe0ec]">
                   <p className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.08em]">Honors & Awards</p>
-                  <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c]">003</span>
+                  <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c]">004</span>
                 </div>
                 {honors.map((h, i) => (
                   <div key={h.id} className={cn("px-6 py-4", i !== 0 && "border-t border-[#dbe0ec]")}>
@@ -257,7 +397,7 @@ export function AdminApplicationReview() {
               <section className="bg-white border border-[#dbe0ec]">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-[#dbe0ec]">
                   <p className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.08em]">Written Responses</p>
-                  <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c]">004</span>
+                  <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c]">005</span>
                 </div>
                 {responses.map((resp, i) => (
                   <div key={resp.id} className={cn("px-6 py-5", i !== 0 && "border-t border-[#dbe0ec]")}>
@@ -291,6 +431,53 @@ export function AdminApplicationReview() {
                 <p className="font-['Geist_Mono',monospace] text-[11px] text-black">Evaluation saved.</p>
               </div>
             )}
+
+            {/* Positions summary in right pane */}
+            {appliedPositions.length > 0 && (
+              <div>
+                <p className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.08em] mb-3">Positions</p>
+                <div className="space-y-2">
+                  {appliedPositions.map((ap: any) => (
+                    <div key={ap.id} className="border border-[#dbe0ec] px-3 py-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-['Radio_Canada_Big',sans-serif] text-black text-xs font-medium">
+                          {ap.positions?.title || "Unknown"}
+                        </p>
+                        <span className={cn(
+                          "font-['Geist_Mono',monospace] text-[9px] px-1.5 py-0.5 border shrink-0",
+                          ap.status === "accepted" ? "bg-black border-black text-white" :
+                          ap.status === "rejected" ? "border-[#dbe0ec] text-[#6c6c6c] line-through" :
+                          "border-[#6c6c6c] text-[#6c6c6c]"
+                        )}>
+                          {POSITION_STATUS_LABELS[ap.status] || ap.status}
+                        </span>
+                      </div>
+                      {/* Only show decision controls in accepted stage */}
+                      {application.status === "accepted" && (
+                        <div className="flex items-center gap-1 mt-1.5">
+                          {POSITION_STATUSES.map((status) => (
+                            <button
+                              key={status}
+                              disabled={updatingPositionId === ap.id}
+                              onClick={() => handleUpdatePositionStatus(ap.id, status)}
+                              className={cn(
+                                "px-1.5 py-0.5 border font-['Geist_Mono',monospace] text-[9px] transition-colors",
+                                ap.status === status
+                                  ? "bg-black border-black text-white"
+                                  : "border-[#dbe0ec] text-[#6c6c6c] hover:border-black hover:text-black"
+                              )}
+                            >
+                              {POSITION_STATUS_LABELS[status]}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {RUBRIC.map((criterion) => (
               <div key={criterion.id}>
                 <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm mb-3">{criterion.label}</p>
@@ -331,6 +518,57 @@ export function AdminApplicationReview() {
                     {(Object.values(scores).reduce((a, b) => a + b, 0) / Object.keys(scores).length).toFixed(1)}
                     <span className="text-[#6c6c6c] text-[10px]"> / 5.0</span>
                   </span>
+                </div>
+              </div>
+            )}
+
+            {/* All Reviews */}
+            {allReviews.filter((r) => r.reviewer_id !== adminProfile?.id).length > 0 && (
+              <div>
+                <p className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.08em] mb-3">All Reviews</p>
+                <div className="space-y-3">
+                  {allReviews
+                    .filter((r) => r.reviewer_id !== adminProfile?.id)
+                    .map((review) => {
+                      const prof = review.profiles;
+                      const firstName = prof?.first_name || "";
+                      const lastName = prof?.last_name || "";
+                      const reviewerName = `${firstName} ${lastName}`.trim() || prof?.email || "Unknown";
+                      const initials = (firstName.charAt(0) + lastName.charAt(0)).toUpperCase() || "?";
+                      const reviewScores: Record<string, number> = review.scores || {};
+                      return (
+                        <div key={review.id} className="border border-[#dbe0ec] px-4 py-3 space-y-2">
+                          <div className="flex items-center gap-2">
+                            <div className="w-6 h-6 bg-black flex items-center justify-center shrink-0">
+                              <span className="font-['Geist_Mono',monospace] text-[9px] text-white leading-none">{initials}</span>
+                            </div>
+                            <span className="font-['Radio_Canada_Big',sans-serif] text-black text-xs font-medium">{reviewerName}</span>
+                          </div>
+                          {Object.keys(reviewScores).length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {RUBRIC.map((c) =>
+                                reviewScores[c.id] != null ? (
+                                  <span
+                                    key={c.id}
+                                    className="font-['Geist_Mono',monospace] text-[9px] border border-[#dbe0ec] text-[#6c6c6c] px-1.5 py-0.5"
+                                  >
+                                    {c.label.split(" ")[0]} {reviewScores[c.id]}/5
+                                  </span>
+                                ) : null
+                              )}
+                            </div>
+                          )}
+                          {review.notes && (
+                            <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-xs leading-relaxed">{review.notes}</p>
+                          )}
+                          {review.updated_at && (
+                            <p className="font-['Geist_Mono',monospace] text-[9px] text-[#6c6c6c]">
+                              {new Date(review.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             )}

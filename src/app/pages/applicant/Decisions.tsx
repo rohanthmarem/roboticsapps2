@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { Mail, CheckCircle2, PartyPopper, Loader2 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { useAuth } from "../../lib/AuthContext";
-import { useApplications } from "../../lib/hooks";
+import { useApplication } from "../../lib/hooks";
 import { supabase } from "../../lib/supabase";
 import { cn } from "../../lib/utils";
 
@@ -17,7 +17,7 @@ function ChevronRight(props: React.SVGProps<SVGSVGElement>) {
 
 export function ApplicantDecisions() {
   const { profile } = useAuth();
-  const { applications, loading: appsLoading } = useApplications(profile?.id);
+  const { application, loading: appsLoading } = useApplication(profile?.id);
   const [decisions, setDecisions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeDecision, setActiveDecision] = useState<string | null>(null);
@@ -28,15 +28,13 @@ export function ApplicantDecisions() {
       return;
     }
 
-    const appIds = applications.map((a: any) => a.id);
-    if (appIds.length === 0) {
+    const apPositionIds = application?.application_positions?.map((ap: any) => ap.id) || [];
+    if (!application || apPositionIds.length === 0) {
       setDecisions([]);
       setLoading(false);
       return;
     }
 
-    // Fetch decisions directly — settings check is done via the decisions_released setting
-    // but we fetch fresh each time to avoid stale cache issues
     const fetchDecisions = async () => {
       // Check decisions_released setting fresh from DB
       const { data: settingRow } = await supabase
@@ -45,7 +43,9 @@ export function ApplicantDecisions() {
         .eq("key", "decisions_released")
         .maybeSingle();
 
-      const released = settingRow?.value === true || settingRow?.value === "true";
+      // Be permissive: check for true, "true", or truthy JSONB value
+      const val = settingRow?.value;
+      const released = val === true || val === "true" || val === 1 || val === "1";
       if (!released) {
         setDecisions([]);
         setLoading(false);
@@ -54,8 +54,8 @@ export function ApplicantDecisions() {
 
       const { data, error } = await supabase
         .from("decisions")
-        .select("*, applications(position_id, user_id, positions(title))")
-        .in("application_id", appIds)
+        .select("*, application_positions(position_id, positions(title))")
+        .in("application_position_id", apPositionIds)
         .order("created_at", { ascending: false });
 
       if (error) console.error("Failed to fetch decisions:", error);
@@ -64,7 +64,7 @@ export function ApplicantDecisions() {
     };
 
     fetchDecisions();
-  }, [profile, appsLoading, applications.length]);
+  }, [profile, appsLoading, application]);
 
   const triggerConfetti = () => {
     const duration = 3 * 1000;
@@ -88,7 +88,7 @@ export function ApplicantDecisions() {
   const renderLetter = (id: string) => {
     const decision = decisions.find((d) => d.id === id);
     if (!decision) return null;
-    const posTitle = decision.applications?.positions?.title || "the position";
+    const posTitle = decision.application_positions?.positions?.title || "the position";
 
     if (decision.type === "accepted") {
       return (
@@ -112,7 +112,7 @@ export function ApplicantDecisions() {
               <p style={{ whiteSpace: "pre-wrap" }}>{decision.letter_content}</p>
             ) : (
               <>
-                <p>Dear {profile?.first_name || "Applicant"},</p>
+                <p>Dear {profile?.first_name},</p>
                 <p>Congratulations! We are thrilled to offer you the position of <strong>{posTitle}</strong> on the WOSS Robotics executive team for the 2026-2027 year.</p>
                 <p>Your application and interview stood out among a highly competitive pool. We were impressed by your experiences and your passion for robotics.</p>
                 <p>Please confirm your acceptance through the portal. We look forward to working with you!</p>
@@ -156,7 +156,7 @@ export function ApplicantDecisions() {
               <p style={{ whiteSpace: "pre-wrap" }}>{decision.letter_content}</p>
             ) : (
               <>
-                <p>Dear {profile?.first_name || "Applicant"},</p>
+                <p>Dear {profile?.first_name},</p>
                 <p>Thank you for applying for the <strong>{posTitle}</strong> position on the WOSS Robotics executive team.</p>
                 <p>This year we received many strong applications. Due to the limited number of executive positions, we are unable to offer you a role at this time.</p>
                 <p>We encourage you to stay involved with the club as a general member and apply again next year. Your interest and effort are deeply appreciated.</p>
@@ -229,7 +229,7 @@ export function ApplicantDecisions() {
                     <p className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.06em]">WOSS Robotics</p>
                   </div>
                   <h3 className={cn("font-['Radio_Canada_Big',sans-serif] text-sm text-black truncate", !d.is_read && "font-medium")}>
-                    Update regarding your application for {d.applications?.positions?.title || "executive position"}
+                    Update regarding your application for {d.application_positions?.positions?.title || "executive position"}
                   </h3>
                 </div>
                 <div className="hidden md:block shrink-0">
