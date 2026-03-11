@@ -3,6 +3,16 @@
  * Used for decision notifications, meeting updates, and other transactional emails.
  */
 
+/** Escape HTML special characters to prevent injection in email templates. */
+function escapeHtml(str: string): string {
+    return str
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+
 const COLORS = {
     black: "#000000",
     darkBg: "#030213",
@@ -124,6 +134,8 @@ export function acceptanceEmail(
     positionTitle: string,
     portalUrl: string,
 ): string {
+    const safeFirst = escapeHtml(firstName);
+    const safePosition = escapeHtml(positionTitle);
     return emailWrapper(`
     ${label("Accepted")}
     ${heading("Welcome to WOSS Robotics!")}
@@ -131,13 +143,13 @@ export function acceptanceEmail(
       Congratulations on your new role.
     </p>
 
-    ${paragraph(`Dear ${firstName},`)}
-    ${paragraph(`Congratulations! We are thrilled to offer you the position of <strong>${positionTitle}</strong> on the WOSS Robotics executive team for the 2026-2027 year.`)}
+    ${paragraph(`Dear ${safeFirst},`)}
+    ${paragraph(`Congratulations! We are thrilled to offer you the position of <strong>${safePosition}</strong> on the WOSS Robotics executive team for the 2026-2027 year.`)}
     ${paragraph("Your application and interview stood out among a highly competitive pool of candidates. We were impressed by your experiences, your dedication, and your passion for robotics.")}
     ${paragraph("Please confirm your acceptance through the portal at your earliest convenience. We look forward to an incredible year working together!")}
 
     ${infoBox([
-        { label: "Position", value: positionTitle },
+        { label: "Position", value: safePosition },
         { label: "Team", value: "WOSS Robotics Executive — 2026-2027" },
         { label: "Status", value: "Accepted" },
     ])}
@@ -157,20 +169,22 @@ export function rejectionEmail(
     positionTitle: string,
     portalUrl: string,
 ): string {
+    const safeFirst = escapeHtml(firstName);
+    const safePosition = escapeHtml(positionTitle);
     return emailWrapper(`
     ${label("Update")}
     ${heading("Update from WOSS Robotics")}
     <p style="font-family:Georgia,'Times New Roman',serif;font-size:15px;color:${COLORS.gray};letter-spacing:-0.2px;line-height:1.5;margin:0 0 32px;">
-      Regarding your application for ${positionTitle}.
+      Regarding your application for ${safePosition}.
     </p>
 
-    ${paragraph(`Dear ${firstName},`)}
-    ${paragraph(`Thank you for applying for the <strong>${positionTitle}</strong> position on the WOSS Robotics executive team.`)}
+    ${paragraph(`Dear ${safeFirst},`)}
+    ${paragraph(`Thank you for applying for the <strong>${safePosition}</strong> position on the WOSS Robotics executive team.`)}
     ${paragraph("This year we received many strong applications from talented candidates. Due to the limited number of executive positions available, we are unable to offer you a role at this time.")}
     ${paragraph("We truly value your interest and encourage you to stay involved with the club as a general member. We hope you'll consider applying again next year — your effort and enthusiasm are deeply appreciated.")}
 
     ${infoBox([
-        { label: "Position", value: positionTitle },
+        { label: "Position", value: safePosition },
         { label: "Status", value: "Not selected" },
     ])}
 
@@ -193,21 +207,27 @@ export function meetingUpdateEmail(
     details: string,
     portalUrl: string,
 ): string {
+    const safeFirst = escapeHtml(firstName);
+    const safeTitle = escapeHtml(meetingTitle);
+    const safeDate = escapeHtml(date);
+    const safeTime = escapeHtml(time);
+    const safeLocation = escapeHtml(location);
+    const safeDetails = escapeHtml(details);
     return emailWrapper(`
     ${label("Meeting Update")}
-    ${heading(meetingTitle)}
+    ${heading(safeTitle)}
     <p style="font-family:Georgia,'Times New Roman',serif;font-size:15px;color:${COLORS.gray};letter-spacing:-0.2px;line-height:1.5;margin:0 0 32px;">
       You have an upcoming meeting scheduled.
     </p>
 
-    ${paragraph(`Hi ${firstName},`)}
-    ${paragraph(details)}
+    ${paragraph(`Hi ${safeFirst},`)}
+    ${paragraph(safeDetails)}
 
     ${infoBox([
-        { label: "Event", value: meetingTitle },
-        { label: "Date", value: date },
-        { label: "Time", value: time },
-        { label: "Location", value: location },
+        { label: "Event", value: safeTitle },
+        { label: "Date", value: safeDate },
+        { label: "Time", value: safeTime },
+        { label: "Location", value: safeLocation },
     ])}
 
     ${button("Open Portal", portalUrl)}
@@ -226,17 +246,19 @@ export function genericNotificationEmail(
     bodyText: string,
     portalUrl: string,
 ): string {
+    const safeFirst = escapeHtml(firstName);
+    const safeSubject = escapeHtml(subject);
     return emailWrapper(`
     ${label("Notification")}
-    ${heading(subject)}
+    ${heading(safeSubject)}
     <p style="font-family:Georgia,'Times New Roman',serif;font-size:15px;color:${COLORS.gray};letter-spacing:-0.2px;line-height:1.5;margin:0 0 32px;">
       A new update from WOSS Robotics.
     </p>
 
-    ${paragraph(`Hi ${firstName},`)}
+    ${paragraph(`Hi ${safeFirst},`)}
     ${bodyText
         .split("\n")
-        .map((line) => paragraph(line))
+        .map((line) => paragraph(escapeHtml(line)))
         .join("")}
 
     ${button("Open Portal", portalUrl)}
@@ -253,6 +275,7 @@ export function decisionReleasedEmail(
     firstName: string,
     portalUrl: string,
 ): string {
+    const safeFirst = escapeHtml(firstName);
     return emailWrapper(`
     ${label("Decisions Released")}
     ${heading("Your decision is ready")}
@@ -260,7 +283,7 @@ export function decisionReleasedEmail(
       The executive application decisions have been released.
     </p>
 
-    ${paragraph(`Dear ${firstName},`)}
+    ${paragraph(`Dear ${safeFirst},`)}
     ${paragraph("The WOSS Robotics executive team has finished reviewing all applications for the 2026-2027 year. Your decision letter is now available in the portal.")}
     ${paragraph("Please sign in to view your personalized decision letter and any next steps.")}
 

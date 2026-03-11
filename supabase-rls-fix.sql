@@ -234,7 +234,11 @@ create policy "Admins can update slots"
   );
 
 create policy "Users can update slots for booking"
-  on public.interview_slots for update using (true);
+  on public.interview_slots for update using (
+    -- Removed: was USING (true) which allowed any user to update any slot.
+    -- Booking is handled via admin or Cal.com; admins have their own policy.
+    public.is_admin()
+  );
 
 create policy "Admins can delete slots"
   on public.interview_slots for delete using (

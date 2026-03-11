@@ -70,8 +70,11 @@ function generateICS(params: {
     return lines.join("\r\n");
 }
 
+const ALLOWED_ORIGIN =
+    Deno.env.get("SITE_URL") || "https://applications.wossrobotics.ca";
+
 const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": ALLOWED_ORIGIN,
     "Access-Control-Allow-Headers":
         "authorization, x-client-info, apikey, content-type",
 };
@@ -188,6 +191,26 @@ Deno.serve(async (req) => {
                 status: 401,
                 headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
+        }
+
+        // Verify the user has admin role
+        const { data: callerProfile } = await supabase
+            .from("profiles")
+            .select("role")
+            .eq("id", user.id)
+            .single();
+
+        if (callerProfile?.role !== "admin") {
+            return new Response(
+                JSON.stringify({ error: "Admin access required" }),
+                {
+                    status: 403,
+                    headers: {
+                        ...corsHeaders,
+                        "Content-Type": "application/json",
+                    },
+                },
+            );
         }
 
         const {
@@ -317,11 +340,9 @@ Deno.serve(async (req) => {
             return new Response(
                 JSON.stringify({
                     error: "Failed to create calendar event",
-                    details: calData,
-                    hint,
-                    calendarId: GOOGLE_CALENDAR_ID,
-                    impersonatedUser: GOOGLE_WORKSPACE_IMPERSONATE_USER || null,
-                    googleMessage,
+                    message:
+                        googleMessage ||
+                        "An internal error occurred while creating the calendar event.",
                 }),
                 {
                     status: 500,
@@ -422,10 +443,7 @@ Deno.serve(async (req) => {
 
         return new Response(
             JSON.stringify({
-                error: message,
-                hint,
-                calendarId: GOOGLE_CALENDAR_ID,
-                impersonatedUser: GOOGLE_WORKSPACE_IMPERSONATE_USER || null,
+                error: "An internal error occurred.",
             }),
             {
                 status: 500,
