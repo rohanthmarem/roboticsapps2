@@ -5,11 +5,6 @@ import { useAllApplications, usePositions } from "../../lib/hooks";
 import { supabase } from "../../lib/supabase";
 import { cn } from "../../lib/utils";
 import { STATUS_LABELS } from "../../data";
-import {
-    genericNotificationEmail,
-    acceptanceEmail,
-    rejectionEmail,
-} from "../../lib/email-templates";
 
 const COLUMNS: { key: string; label: string }[] = [
     { key: "draft", label: "Draft" },
@@ -178,61 +173,6 @@ export function AdminDashboard() {
             setStatusError(`Failed to update status: ${error.message}`);
         } else {
             refetch();
-
-            // Send status update email
-            const app = applications.find((a: any) => a.id === appId);
-            if (app?.profiles?.email) {
-                const firstName = app.profiles.first_name || "Applicant";
-                const portalUrl = window.location.origin + "/applicant";
-                const positionNames =
-                    getPositionTitles(app) || "Executive Position";
-                let emailHtml: string | null = null;
-                let emailSubject = "";
-
-                if (newStatus === "under_review") {
-                    emailSubject = "Application Under Review — WOSS Robotics";
-                    emailHtml = genericNotificationEmail(
-                        firstName,
-                        "Application Under Review",
-                        `Your application for ${positionNames} is now being reviewed by our team. We will notify you of any updates.\n\nThank you for your patience.`,
-                        portalUrl,
-                    );
-                } else if (newStatus === "interview_scheduled") {
-                    emailSubject = `Interview Invitation — ${positionNames}`;
-                    emailHtml = genericNotificationEmail(
-                        firstName,
-                        "You've Been Invited to Interview!",
-                        `Congratulations! You have been selected for an interview for ${positionNames}.\n\nPlease use the link below to book your interview slot at a time that works for you. You can also find this link on your applicant portal.\n\nhttps://cal.com/wossrobotics/exec-interview-2026-2027`,
-                        portalUrl + "/interview",
-                    );
-                } else if (newStatus === "accepted") {
-                    emailSubject = `Congratulations! — ${positionNames}`;
-                    emailHtml = acceptanceEmail(
-                        firstName,
-                        positionNames,
-                        portalUrl + "/decisions",
-                    );
-                } else if (newStatus === "rejected") {
-                    emailSubject = `Application Update — ${positionNames}`;
-                    emailHtml = rejectionEmail(
-                        firstName,
-                        positionNames,
-                        portalUrl + "/decisions",
-                    );
-                }
-
-                if (emailHtml) {
-                    supabase.functions
-                        .invoke("send-email", {
-                            body: {
-                                to: app.profiles.email,
-                                subject: emailSubject,
-                                html: emailHtml,
-                            },
-                        })
-                        .catch(console.error);
-                }
-            }
         }
         setUpdating(null);
     };

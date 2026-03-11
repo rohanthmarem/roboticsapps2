@@ -289,27 +289,31 @@ drop policy if exists "Admins can select decisions" on public.decisions;
 drop policy if exists "Admins can insert decisions" on public.decisions;
 drop policy if exists "Admins can update decisions" on public.decisions;
 
+-- NOTE: decisions.application_id was renamed to application_position_id in
+-- migration 20260310100000_unified_application.sql. Policies below use the new name.
 create policy "Users can view own decisions"
   on public.decisions for select using (
-    exists (select 1 from public.applications where id = application_id and user_id = auth.uid())
+    exists (
+      select 1 from public.application_positions ap
+      join public.applications a on a.id = ap.application_id
+      where ap.id = application_position_id and a.user_id = auth.uid()
+    )
   );
 
 create policy "Admins can view all decisions"
-  on public.decisions for select using (
-    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
-  );
+  on public.decisions for select using (public.is_admin());
 
 create policy "Users can update own decisions"
   on public.decisions for update using (
-    exists (select 1 from public.applications where id = application_id and user_id = auth.uid())
+    exists (
+      select 1 from public.application_positions ap
+      join public.applications a on a.id = ap.application_id
+      where ap.id = application_position_id and a.user_id = auth.uid()
+    )
   );
 
 create policy "Admins can insert decisions"
-  on public.decisions for insert with check (
-    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
-  );
+  on public.decisions for insert with check (public.is_admin());
 
 create policy "Admins can update decisions"
-  on public.decisions for update using (
-    exists (select 1 from public.profiles where id = auth.uid() and role = 'admin')
-  );
+  on public.decisions for update using (public.is_admin());
