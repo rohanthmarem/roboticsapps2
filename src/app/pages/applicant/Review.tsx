@@ -397,7 +397,7 @@ export function ApplicantReview() {
                                             {h.title}
                                         </p>
                                         <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c]">
-                                            {h.recognition_level} \u00b7{" "}
+                                            {h.recognition_level} &middot;{" "}
                                             {h.grade_level}
                                         </span>
                                     </div>
