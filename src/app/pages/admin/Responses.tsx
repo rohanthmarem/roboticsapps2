@@ -54,21 +54,18 @@ export function AdminResponses() {
         setQuestions(qs);
         setLoadingQuestions(false);
 
-        // Fetch response counts for all questions
+        // Fetch all response question_ids in a single query, count client-side
         if (qs.length > 0) {
-          Promise.all(
-            qs.map((q) =>
-              supabase
-                .from("responses")
-                .select("id", { count: "exact", head: true })
-                .eq("question_id", q.id)
-                .then(({ count }) => ({ id: q.id, count: count || 0 }))
-            )
-          ).then((counts) => {
-            const map: Record<string, number> = {};
-            for (const c of counts) map[c.id] = c.count;
-            setResponseCounts(map);
-          });
+          supabase
+            .from("responses")
+            .select("question_id")
+            .then(({ data }) => {
+              const map: Record<string, number> = {};
+              for (const r of data || []) {
+                map[r.question_id] = (map[r.question_id] || 0) + 1;
+              }
+              setResponseCounts(map);
+            });
         }
       });
   }, []);

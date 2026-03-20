@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { CheckCircle2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "../../lib/AuthContext";
 import { useQuestions, useApplication, useSettings } from "../../lib/hooks";
 import { supabase } from "../../lib/supabase";
@@ -60,37 +61,40 @@ export function ApplicantEssays() {
     loadAll();
   }, [appsLoading, qLoading, application?.id]);
 
-  const saveResponse = useCallback(
-    async (applicationId: string, questionId: string, content: string) => {
-      const { data: existing } = await supabase
-        .from("responses")
-        .select("id")
-        .eq("application_id", applicationId)
-        .eq("question_id", questionId)
-        .maybeSingle();
-
-      if (existing) {
-        await supabase
-          .from("responses")
-          .update({ content, updated_at: new Date().toISOString() })
-          .eq("id", existing.id);
-      } else {
-        await supabase
-          .from("responses")
-          .insert({ application_id: applicationId, question_id: questionId, content, updated_at: new Date().toISOString() });
-      }
-    },
-    []
-  );
+  const savingRef = useRef(false);
 
   const saveAll = useCallback(async (responsesToSave: Record<string, string>) => {
-    if (!application) return;
-    for (const [key, content] of Object.entries(responsesToSave)) {
-      const [appId, qId] = key.split(":");
-      if (!appId || !qId) continue;
-      await saveResponse(appId, qId, content);
+    if (!application || savingRef.current) return;
+    savingRef.current = true;
+    try {
+      const rows = Object.entries(responsesToSave)
+        .filter(([key]) => key.includes(":"))
+        .map(([key, content]) => {
+          const [appId, qId] = key.split(":");
+          return {
+            application_id: appId,
+            question_id: qId,
+            content,
+            updated_at: new Date().toISOString(),
+          };
+        });
+
+      if (rows.length === 0) return;
+
+      // Batch upsert all responses in a single call
+      const { error } = await supabase
+        .from("responses")
+        .upsert(rows, { onConflict: "application_id,question_id" });
+
+      if (error) {
+        console.error("Failed to save responses:", error);
+        toast.error("Failed to save responses. Please try again.");
+        throw error;
+      }
+    } finally {
+      savingRef.current = false;
     }
-  }, [application, saveResponse]);
+  }, [application]);
 
   const handleChange = (applicationId: string, questionId: string, content: string) => {
     const key = `${applicationId}:${questionId}`;
@@ -108,20 +112,27 @@ export function ApplicantEssays() {
   };
 
   // Auto-save with debounce
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
   useEffect(() => {
     if (isSubmitted || savingState !== "saving") return;
-    const timer = setTimeout(async () => {
-      await saveAll(responsesRef.current);
-      setSavingState("saved");
+    saveTimerRef.current = setTimeout(async () => {
+      try {
+        await saveAll(responsesRef.current);
+        setSavingState("saved");
+      } catch {
+        setSavingState("idle");
+      }
     }, 1000);
-    return () => clearTimeout(timer);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [savingState, saveAll, isSubmitted]);
 
-  // Save on visibility change (tab switch)
+  // Save on visibility change (tab switch) — clear debounce first to prevent double-save
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === "hidden") {
-        saveAll(responsesRef.current);
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        saveAll(responsesRef.current).catch(() => {});
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);

@@ -49,7 +49,7 @@ export function AdminApplicationReview() {
 
     useEffect(() => {
         const fetchData = async () => {
-            // Fetch application with positions via junction table
+            // Fetch application first (needed to get user_id for parallel queries)
             const { data: app } = await supabase
                 .from("applications")
                 .select(
@@ -60,50 +60,24 @@ export function AdminApplicationReview() {
             setApplication(app);
 
             if (app) {
-                // Fetch applicant profile
-                const { data: prof } = await supabase
-                    .from("profiles")
-                    .select("*")
-                    .eq("id", app.user_id)
-                    .single();
-                setApplicantProfile(prof);
+                // Fetch all related data in parallel
+                const [profResult, actsResult, respsResult, honsResult, revsResult] = await Promise.all([
+                    supabase.from("profiles").select("*").eq("id", app.user_id).single(),
+                    supabase.from("activities").select("*").eq("user_id", app.user_id).order("sort_order"),
+                    supabase.from("responses").select("*, questions(prompt)").eq("application_id", app.id),
+                    supabase.from("honors").select("*").eq("user_id", app.user_id).order("sort_order"),
+                    supabase.from("reviews").select("*, profiles:reviewer_id(first_name, last_name, email)").eq("application_id", app.id).order("updated_at", { ascending: false }),
+                ]);
 
-                // Fetch activities
-                const { data: acts } = await supabase
-                    .from("activities")
-                    .select("*")
-                    .eq("user_id", app.user_id)
-                    .order("sort_order");
-                setActivities(acts || []);
-
-                // Fetch responses with questions
-                const { data: resps } = await supabase
-                    .from("responses")
-                    .select("*, questions(prompt)")
-                    .eq("application_id", app.id);
-                setResponses(resps || []);
-
-                // Fetch honors
-                const { data: hons } = await supabase
-                    .from("honors")
-                    .select("*")
-                    .eq("user_id", app.user_id)
-                    .order("sort_order");
-                setHonors(hons || []);
-
-                // Fetch all reviews for this application
-                const { data: allRevs } = await supabase
-                    .from("reviews")
-                    .select(
-                        "*, profiles:reviewer_id(first_name, last_name, email)",
-                    )
-                    .eq("application_id", app.id)
-                    .order("updated_at", { ascending: false });
-                setAllReviews(allRevs || []);
+                setApplicantProfile(profResult.data);
+                setActivities(actsResult.data || []);
+                setResponses(respsResult.data || []);
+                setHonors(honsResult.data || []);
+                setAllReviews(revsResult.data || []);
 
                 // Set current admin's scores/notes into edit state
-                if (adminProfile && allRevs) {
-                    const myReview = allRevs.find(
+                if (adminProfile && revsResult.data) {
+                    const myReview = revsResult.data.find(
                         (r: any) => r.reviewer_id === adminProfile.id,
                     );
                     if (myReview) {

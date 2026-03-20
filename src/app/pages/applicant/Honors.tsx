@@ -4,6 +4,7 @@ import { Plus, Trash2, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../../lib/AuthContext";
 import { useApplication } from "../../lib/hooks";
+import { useDataContext } from "../../lib/DataContext";
 import { supabase } from "../../lib/supabase";
 import { GRADE_LEVELS, RECOGNITION_LEVELS } from "../../data";
 import { cn } from "../../lib/utils";
@@ -27,6 +28,7 @@ interface HonorItem {
 export function ApplicantHonors() {
   const { profile } = useAuth();
   const { application } = useApplication(profile?.id);
+  const { refetchProgressCounts } = useDataContext();
   const isSubmitted = application && application.status !== "draft";
   const navigate = useNavigate();
   const [honors, setHonors] = useState<HonorItem[]>([]);
@@ -55,34 +57,55 @@ export function ApplicantHonors() {
       });
   }, [profile]);
 
+  const savingRef = useRef(false);
+
   const doSave = useCallback(async (honorsToSave: HonorItem[]) => {
-    if (!profile) return;
+    if (!profile || savingRef.current) return;
+    savingRef.current = true;
     setAutoSaveState("saving");
 
-    const { data: existing } = await supabase.from("honors").select("id").eq("user_id", profile.id);
-    const existingIds = new Set((existing || []).map((h: any) => h.id));
-    const currentIds = new Set(honorsToSave.map((h) => h.id));
+    try {
+      const currentIds = honorsToSave.map((h) => h.id);
 
-    for (const eh of existing || []) {
-      if (!currentIds.has(eh.id)) {
-        await supabase.from("honors").delete().eq("id", eh.id);
-      }
-    }
+      // Single delete for removed items
+      const { error: delError } = await supabase
+        .from("honors")
+        .delete()
+        .eq("user_id", profile.id)
+        .not("id", "in", `(${currentIds.join(",")})`);
 
-    for (let i = 0; i < honorsToSave.length; i++) {
-      const h = honorsToSave[i];
-      const row = {
-        id: h.id, user_id: profile.id, title: h.title,
-        grade_level: h.grade_level, recognition_level: h.recognition_level, sort_order: i,
-      };
-      if (existingIds.has(h.id)) {
-        await supabase.from("honors").update(row).eq("id", h.id);
-      } else {
-        await supabase.from("honors").insert(row);
+      if (delError) {
+        console.error("Failed to delete honors:", delError);
+        toast.error("Failed to save honors. Please try again.");
+        setAutoSaveState("idle");
+        return;
       }
+
+      // Single upsert for all current items
+      if (honorsToSave.length > 0) {
+        const rows = honorsToSave.map((h, i) => ({
+          id: h.id, user_id: profile.id, title: h.title,
+          grade_level: h.grade_level, recognition_level: h.recognition_level, sort_order: i,
+        }));
+
+        const { error: upsertError } = await supabase
+          .from("honors")
+          .upsert(rows, { onConflict: "id" });
+
+        if (upsertError) {
+          console.error("Failed to save honors:", upsertError);
+          toast.error("Failed to save honors. Please try again.");
+          setAutoSaveState("idle");
+          return;
+        }
+      }
+
+      setAutoSaveState("saved");
+      refetchProgressCounts();
+    } finally {
+      savingRef.current = false;
     }
-    setAutoSaveState("saved");
-  }, [profile]);
+  }, [profile, refetchProgressCounts]);
 
   const triggerAutoSave = useCallback((newHonors: HonorItem[]) => {
     setAutoSaveState("saving");

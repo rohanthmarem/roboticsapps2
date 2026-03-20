@@ -5,6 +5,7 @@ import { GripVertical, Plus, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircl
 import { toast } from "sonner";
 import { useAuth } from "../../lib/AuthContext";
 import { useApplication } from "../../lib/hooks";
+import { useDataContext } from "../../lib/DataContext";
 import { supabase } from "../../lib/supabase";
 import { ACTIVITY_TYPES } from "../../data";
 import { cn } from "../../lib/utils";
@@ -34,6 +35,7 @@ interface ActivityItem {
 export function ApplicantActivities() {
   const { profile } = useAuth();
   const { application } = useApplication(profile?.id);
+  const { refetchProgressCounts } = useDataContext();
   const isSubmitted = application && application.status !== "draft";
   const navigate = useNavigate();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -74,50 +76,64 @@ export function ApplicantActivities() {
       });
   }, [profile]);
 
+  const savingRef = useRef(false);
+
   const doSave = useCallback(async (activitiesToSave: ActivityItem[]) => {
-    if (!profile) return;
+    if (!profile || savingRef.current) return;
+    savingRef.current = true;
     setAutoSaveState("saving");
 
-    const { data: existing } = await supabase.from("activities").select("id").eq("user_id", profile.id);
-    const existingIds = new Set((existing || []).map((a: any) => a.id));
-    const currentIds = new Set(activitiesToSave.map((a) => a.id));
+    try {
+      const currentIds = activitiesToSave.map((a) => a.id);
 
-    // Delete removed
-    for (const ea of existing || []) {
-      if (!currentIds.has(ea.id)) {
-        await supabase.from("activities").delete().eq("id", ea.id);
+      // Single delete for removed items
+      const { error: delError } = await supabase
+        .from("activities")
+        .delete()
+        .eq("user_id", profile.id)
+        .not("id", "in", `(${currentIds.join(",")})`);
+
+      if (delError) {
+        console.error("Failed to delete activities:", delError);
+        toast.error("Failed to save activities. Please try again.");
+        setAutoSaveState("idle");
+        return;
       }
-    }
 
-    // Upsert each
-    let hasError = false;
-    for (let i = 0; i < activitiesToSave.length; i++) {
-      const a = activitiesToSave[i];
-      const row = {
-        id: a.id,
-        user_id: profile.id,
-        type: a.type,
-        role: a.role,
-        organization: a.organization,
-        description: a.description,
-        years: a.years,
-        hours_per_week: a.hours_per_week,
-        weeks_per_year: a.weeks_per_year,
-        plan_to_continue: a.plan_to_continue,
-        sort_order: i,
-      };
+      // Single upsert for all current items
+      if (activitiesToSave.length > 0) {
+        const rows = activitiesToSave.map((a, i) => ({
+          id: a.id,
+          user_id: profile.id,
+          type: a.type,
+          role: a.role,
+          organization: a.organization,
+          description: a.description,
+          years: a.years,
+          hours_per_week: a.hours_per_week,
+          weeks_per_year: a.weeks_per_year,
+          plan_to_continue: a.plan_to_continue,
+          sort_order: i,
+        }));
 
-      if (existingIds.has(a.id)) {
-        const { error } = await supabase.from("activities").update(row).eq("id", a.id);
-        if (error) { hasError = true; console.error("Failed to update activity:", a.id, error); }
-      } else {
-        const { error } = await supabase.from("activities").insert(row);
-        if (error) { hasError = true; console.error("Failed to insert activity:", a.id, error); }
+        const { error: upsertError } = await supabase
+          .from("activities")
+          .upsert(rows, { onConflict: "id" });
+
+        if (upsertError) {
+          console.error("Failed to save activities:", upsertError);
+          toast.error("Failed to save activities. Please try again.");
+          setAutoSaveState("idle");
+          return;
+        }
       }
-    }
 
-    setAutoSaveState(hasError ? "idle" : "saved");
-  }, [profile]);
+      setAutoSaveState("saved");
+      refetchProgressCounts();
+    } finally {
+      savingRef.current = false;
+    }
+  }, [profile, refetchProgressCounts]);
 
   const triggerAutoSave = useCallback((newActivities: ActivityItem[]) => {
     setAutoSaveState("saving");

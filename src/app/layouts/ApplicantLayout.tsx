@@ -1,9 +1,8 @@
-import { useState, useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { cn } from "../lib/utils";
 import { useAuth } from "../lib/AuthContext";
 import { useApplication, useQuestions } from "../lib/hooks";
-import { supabase } from "../lib/supabase";
+import { useDataContext } from "../lib/DataContext";
 import {
   LayoutDashboard,
   Layers,
@@ -66,29 +65,15 @@ export function ApplicantLayout() {
     navigate("/");
   };
 
-  // Fetch actual counts for progress
-  const [activityCount, setActivityCount] = useState(0);
-  const [responseCount, setResponseCount] = useState(0);
-  const [honorsCount, setHonorsCount] = useState(0);
-
-  useEffect(() => {
-    if (!profile?.id) return;
-    supabase.from("activities").select("id", { count: "exact", head: true }).eq("user_id", profile.id)
-      .then(({ count }) => setActivityCount(count || 0));
-    if (application?.id) {
-      supabase.from("responses").select("id", { count: "exact", head: true }).eq("application_id", application.id)
-        .then(({ count }) => setResponseCount(count || 0));
-    }
-    supabase.from("honors").select("id", { count: "exact", head: true }).eq("user_id", profile.id)
-      .then(({ count }) => setHonorsCount(count || 0));
-  }, [profile?.id, application?.id, location.pathname]);
+  // Use cached progress counts from DataContext — no re-fetch on navigation
+  const { progressCounts } = useDataContext();
 
   // Calculate progress (6 steps matching dashboard)
   const hasProfile = !!(profile?.first_name && profile?.last_name && profile?.grade);
   const hasPositions = appPositions.length > 0;
-  const hasActivities = activityCount > 0;
-  const hasResponses = responseCount > 0;
-  const hasHonors = honorsCount > 0;
+  const hasActivities = progressCounts.activities > 0;
+  const hasResponses = progressCounts.responses > 0;
+  const hasHonors = progressCounts.honors > 0;
   const isSubmitted = !!application && application.status !== "draft";
   const totalSteps = 6;
   let completedSteps = 0;

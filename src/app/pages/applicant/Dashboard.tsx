@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { motion } from "motion/react";
 import { Link, useNavigate } from "react-router";
 import { ArrowRight, PenTool, Loader2, CheckCircle2, Circle, ChevronLeft, ChevronRight } from "lucide-react";
@@ -9,7 +9,7 @@ import {
 } from "date-fns";
 import { useAuth } from "../../lib/AuthContext";
 import { useApplication, useSettings } from "../../lib/hooks";
-import { supabase } from "../../lib/supabase";
+import { useDataContext } from "../../lib/DataContext";
 import { STATUS_LABELS } from "../../data";
 import { cn } from "../../lib/utils";
 
@@ -50,21 +50,7 @@ export function ApplicantDashboard() {
   const firstName = profile?.first_name || "there";
 
   const [calendarMonth, setCalendarMonth] = useState(new Date());
-  const [activityCount, setActivityCount] = useState(0);
-  const [responseCount, setResponseCount] = useState(0);
-  const [honorsCount, setHonorsCount] = useState(0);
-
-  useEffect(() => {
-    if (!profile?.id) return;
-    supabase.from("activities").select("id", { count: "exact", head: true }).eq("user_id", profile.id)
-      .then(({ count }) => setActivityCount(count || 0));
-    if (application?.id) {
-      supabase.from("responses").select("id", { count: "exact", head: true }).eq("application_id", application.id)
-        .then(({ count }) => setResponseCount(count || 0));
-    }
-    supabase.from("honors").select("id", { count: "exact", head: true }).eq("user_id", profile.id)
-      .then(({ count }) => setHonorsCount(count || 0));
-  }, [profile?.id, application?.id]);
+  const { progressCounts } = useDataContext();
 
   const appPositions = application?.application_positions || [];
 
@@ -85,19 +71,19 @@ export function ApplicantDashboard() {
       key: "activities",
       label: "Activities",
       path: "/applicant/activities",
-      complete: activityCount > 0,
+      complete: progressCounts.activities > 0,
     },
     {
       key: "responses",
       label: "Responses",
       path: "/applicant/responses",
-      complete: responseCount > 0,
+      complete: progressCounts.responses > 0,
     },
     {
       key: "honors",
       label: "Honors",
       path: "/applicant/honors",
-      complete: honorsCount > 0,
+      complete: progressCounts.honors > 0,
     },
     {
       key: "review",

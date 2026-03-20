@@ -69,6 +69,7 @@ export function ApplicantProfile() {
                 .eq("id", profile.id);
             if (error) {
                 console.error("Autosave failed:", error);
+                toast.error("Failed to save profile. Please try again.");
                 setAutoSaveState("idle");
             } else {
                 setAutoSaveState("saved");
