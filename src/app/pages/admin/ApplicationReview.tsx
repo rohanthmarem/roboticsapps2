@@ -210,7 +210,8 @@ export function AdminApplicationReview() {
           applicantProfile.email
         : "Unknown";
 
-    const appliedPositions: any[] = application.application_positions || [];
+    const appliedPositions: any[] = [...(application.application_positions || [])]
+        .sort((a: any, b: any) => (a.position_rank ?? 999) - (b.position_rank ?? 999));
     const positionTitles = appliedPositions
         .map((ap: any) => ap.positions?.title)
         .filter(Boolean)
@@ -270,8 +271,11 @@ export function AdminApplicationReview() {
                                         value: applicantProfile?.email || "—",
                                     },
                                     {
-                                        label: "Applied Positions",
-                                        value: positionTitles || "—",
+                                        label: "Applied Positions (by preference)",
+                                        value: appliedPositions
+                                            .map((ap: any) => `#${ap.position_rank ?? "?"} ${ap.positions?.title}`)
+                                            .filter(Boolean)
+                                            .join(", ") || "—",
                                     },
                                     {
                                         label: "Student Number",
@@ -318,10 +322,17 @@ export function AdminApplicationReview() {
                                     >
                                         <div className="flex items-start justify-between gap-4">
                                             <div className="flex-1">
-                                                <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm mb-1">
-                                                    {ap.positions?.title ||
-                                                        "Unknown Position"}
-                                                </p>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    {ap.position_rank != null && (
+                                                        <span className="font-['Geist_Mono',monospace] text-[10px] text-white bg-black px-1.5 py-0.5 shrink-0">
+                                                            #{ap.position_rank}
+                                                        </span>
+                                                    )}
+                                                    <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm">
+                                                        {ap.positions?.title ||
+                                                            "Unknown Position"}
+                                                    </p>
+                                                </div>
                                                 {ap.positions?.description && (
                                                     <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm leading-[1.5]">
                                                         {
@@ -533,10 +544,17 @@ export function AdminApplicationReview() {
                                             className="border border-[#dbe0ec] px-3 py-2"
                                         >
                                             <div className="flex items-center justify-between gap-2">
-                                                <p className="font-['Radio_Canada_Big',sans-serif] text-black text-xs font-medium">
-                                                    {ap.positions?.title ||
-                                                        "Unknown"}
-                                                </p>
+                                                <div className="flex items-center gap-1.5">
+                                                    {ap.position_rank != null && (
+                                                        <span className="font-['Geist_Mono',monospace] text-[9px] text-white bg-black px-1 py-0.5 shrink-0">
+                                                            #{ap.position_rank}
+                                                        </span>
+                                                    )}
+                                                    <p className="font-['Radio_Canada_Big',sans-serif] text-black text-xs font-medium">
+                                                        {ap.positions?.title ||
+                                                            "Unknown"}
+                                                    </p>
+                                                </div>
                                                 <span
                                                     className={cn(
                                                         "font-['Geist_Mono',monospace] text-[9px] px-1.5 py-0.5 border shrink-0",
