@@ -15,11 +15,12 @@ const COLUMNS: { key: string; label: string }[] = [
     { key: "rejected", label: "Declined" },
 ];
 
-/** Build a comma-separated string of position titles from application_positions. */
+/** Build a comma-separated string of position titles from application_positions, sorted by rank. */
 function getPositionTitles(app: any): string {
     const positions = app.application_positions;
     if (!Array.isArray(positions) || positions.length === 0) return "";
-    return positions
+    return [...positions]
+        .sort((a: any, b: any) => (a.position_rank ?? 999) - (b.position_rank ?? 999))
         .map((ap: any) => ap.positions?.title)
         .filter(Boolean)
         .join(", ");
@@ -42,7 +43,8 @@ function PositionTags({
     allPositions: any[];
     onUpdate: () => void;
 }) {
-    const positions: any[] = app.application_positions || [];
+    const positions: any[] = [...(app.application_positions || [])]
+        .sort((a: any, b: any) => (a.position_rank ?? 999) - (b.position_rank ?? 999));
     const [showAdd, setShowAdd] = useState(false);
     const [busy, setBusy] = useState<string | null>(null);
     const popRef = useRef<HTMLDivElement>(null);
@@ -94,7 +96,7 @@ function PositionTags({
                             POS_STATUS_COLORS.pending,
                     )}
                 >
-                    {ap.positions?.title || "?"}
+                    {ap.position_rank != null ? `#${ap.position_rank} ` : ""}{ap.positions?.title || "?"}
                     {busy === ap.id ? (
                         <Loader2 className="w-2.5 h-2.5 animate-spin" />
                     ) : (

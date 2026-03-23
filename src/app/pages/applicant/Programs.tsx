@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "motion/react";
-import { Search, Check, Plus, Minus, Loader2 } from "lucide-react";
+import { Search, Check, Plus, Minus, Loader2, ChevronUp, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../../lib/AuthContext";
 import { usePositions, useApplication, useSettings } from "../../lib/hooks";
@@ -18,6 +18,7 @@ export function ApplicantPrograms() {
   const [saving, setSaving] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [rankUpdating, setRankUpdating] = useState<string | null>(null);
 
   const appWindowOpen = settings.application_window_open === true || settings.application_window_open === "true";
 
@@ -29,8 +30,12 @@ export function ApplicantPrograms() {
   const isDraft = !application || application.status === "draft";
   const isSubmitted = application && application.status !== "draft";
 
+  // Get applied positions sorted by rank
+  const appliedPositions: any[] = (application?.application_positions ?? [])
+    .slice()
+    .sort((a: any, b: any) => (a.position_rank ?? 999) - (b.position_rank ?? 999));
+
   const toggleSelection = (positionId: string) => {
-    // If already applied and draft, allow removal instead of toggle
     if (isSubmitted || appliedPositionIds.has(positionId)) return;
     const newSet = new Set(selectedIds);
     if (newSet.has(positionId)) {
@@ -53,10 +58,52 @@ export function ApplicantPrograms() {
       console.error("Failed to remove position:", error);
       toast.error("Failed to remove position");
     } else {
+      // Re-rank remaining positions after removal
+      const remaining = appliedPositions
+        .filter((ap: any) => ap.position_id !== positionId)
+        .sort((a: any, b: any) => (a.position_rank ?? 999) - (b.position_rank ?? 999));
+      for (let i = 0; i < remaining.length; i++) {
+        if (remaining[i].position_rank !== i + 1) {
+          await supabase
+            .from("application_positions")
+            .update({ position_rank: i + 1 })
+            .eq("id", remaining[i].id);
+        }
+      }
       toast.success("Position removed");
       await refetch();
     }
     setRemovingId(null);
+  };
+
+  const handleMoveRank = async (applicationPositionId: string, direction: "up" | "down") => {
+    if (!application || !isDraft) return;
+    setRankUpdating(applicationPositionId);
+
+    const currentIndex = appliedPositions.findIndex((ap: any) => ap.id === applicationPositionId);
+    const swapIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
+
+    if (swapIndex < 0 || swapIndex >= appliedPositions.length) {
+      setRankUpdating(null);
+      return;
+    }
+
+    const current = appliedPositions[currentIndex];
+    const swap = appliedPositions[swapIndex];
+    const currentRank = current.position_rank ?? currentIndex + 1;
+    const swapRank = swap.position_rank ?? swapIndex + 1;
+
+    const [res1, res2] = await Promise.all([
+      supabase.from("application_positions").update({ position_rank: swapRank }).eq("id", current.id),
+      supabase.from("application_positions").update({ position_rank: currentRank }).eq("id", swap.id),
+    ]);
+
+    if (res1.error || res2.error) {
+      toast.error("Failed to update ranking");
+    }
+
+    await refetch();
+    setRankUpdating(null);
   };
 
   const handleSave = async () => {
@@ -81,10 +128,19 @@ export function ApplicantPrograms() {
       appId = data.id;
     }
 
-    // Insert selected positions into junction table
-    const toInsert = [...selectedIds]
-      .filter((id) => !appliedPositionIds.has(id))
-      .map((position_id) => ({ application_id: appId, position_id }));
+    // Determine next rank start (after existing positions)
+    const existingMaxRank = appliedPositions.reduce(
+      (max: number, ap: any) => Math.max(max, ap.position_rank ?? 0),
+      0
+    );
+
+    // Insert selected positions into junction table with sequential ranks
+    const newIds = [...selectedIds].filter((id) => !appliedPositionIds.has(id));
+    const toInsert = newIds.map((position_id, i) => ({
+      application_id: appId,
+      position_id,
+      position_rank: existingMaxRank + i + 1,
+    }));
 
     let count = 0;
     if (toInsert.length > 0) {
@@ -165,113 +221,196 @@ export function ApplicantPrograms() {
         </div>
       )}
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6c6c6c] w-4 h-4" />
-        <input
-          type="text"
-          placeholder="Search positions..."
-          className="w-full border border-[#dbe0ec] bg-white pl-11 pr-4 py-3.5 font-['Radio_Canada_Big',sans-serif] text-sm text-black placeholder-[#6c6c6c] outline-none focus:border-black transition-colors"
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-        />
-      </div>
-
-      {/* Position list */}
-      <div className="space-y-0 border border-[#dbe0ec]">
-        {filteredPositions.map((pos: any, i: number) => {
-          const isApplied = appliedPositionIds.has(pos.id);
-          const isSelected = selectedIds.has(pos.id) || isApplied;
-          const isRemoving = removingId === pos.id;
-          return (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.06 }}
-              key={pos.id}
-              className={cn("p-6", i !== 0 && "border-t border-[#dbe0ec]")}
-            >
-              <div className="w-full flex items-center justify-between text-left">
-                <button
-                  onClick={() => {
-                    if (!isApplied) toggleSelection(pos.id);
-                  }}
-                  disabled={isApplied && !isDraft}
+      {/* Ranking Section — shown when user has applied positions */}
+      {appliedPositions.length > 0 && (
+        <div>
+          <div className="flex items-center gap-3 mb-4">
+            <p className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.08em]">
+              Your Preference Ranking
+            </p>
+            <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] border border-[#dbe0ec] px-2 py-0.5">
+              {appliedPositions.length} position{appliedPositions.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+          <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm mb-4 tracking-[-0.2px]">
+            {isDraft
+              ? "Use the arrows to rank your positions by preference. #1 is your most preferred."
+              : "Your submitted preference ranking is shown below."}
+          </p>
+          <div className="border border-[#dbe0ec]">
+            {appliedPositions.map((ap: any, i: number) => {
+              const isUpdatingRank = rankUpdating === ap.id;
+              const isRemoving = removingId === ap.position_id;
+              return (
+                <div
+                  key={ap.id}
                   className={cn(
-                    "flex items-start gap-4 flex-1 text-left transition-colors",
-                    isApplied && !isDraft && "opacity-70 cursor-not-allowed"
+                    "flex items-center gap-4 px-5 py-4",
+                    i !== 0 && "border-t border-[#dbe0ec]"
                   )}
                 >
-                  <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] mt-0.5 w-6 shrink-0">
-                    {String(i + 1).padStart(2, "0")}
+                  {/* Rank badge */}
+                  <span className="font-['Geist_Mono',monospace] text-[13px] text-black font-medium w-7 text-center shrink-0">
+                    #{ap.position_rank ?? i + 1}
                   </span>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <h3 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-lg tracking-[-0.3px]">
-                        {pos.title}
-                      </h3>
-                    </div>
-                    <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-base mt-0.5 tracking-[-0.2px]">
-                      {pos.description}
+                  {/* Title */}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm truncate">
+                      {ap.positions?.title || "Unknown Position"}
                     </p>
-                    {isApplied && !isDraft && (
-                      <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] border border-[#dbe0ec] px-2 py-0.5 mt-2 inline-block">
+                  </div>
+                  {/* Controls */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {isDraft && (
+                      <>
+                        <button
+                          onClick={() => handleMoveRank(ap.id, "up")}
+                          disabled={i === 0 || isUpdatingRank}
+                          className={cn(
+                            "w-7 h-7 border flex items-center justify-center transition-colors",
+                            i === 0
+                              ? "border-[#eee] text-[#ccc] cursor-not-allowed"
+                              : "border-[#dbe0ec] text-[#6c6c6c] hover:border-black hover:text-black"
+                          )}
+                          title="Move up"
+                        >
+                          <ChevronUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleMoveRank(ap.id, "down")}
+                          disabled={i === appliedPositions.length - 1 || isUpdatingRank}
+                          className={cn(
+                            "w-7 h-7 border flex items-center justify-center transition-colors",
+                            i === appliedPositions.length - 1
+                              ? "border-[#eee] text-[#ccc] cursor-not-allowed"
+                              : "border-[#dbe0ec] text-[#6c6c6c] hover:border-black hover:text-black"
+                          )}
+                          title="Move down"
+                        >
+                          <ChevronDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleRemovePosition(ap.position_id)}
+                          disabled={isRemoving}
+                          className="w-7 h-7 border border-[#dbe0ec] flex items-center justify-center hover:border-red-400 hover:text-red-500 transition-colors text-[#6c6c6c] disabled:opacity-50 ml-1"
+                          title="Remove position"
+                        >
+                          {isRemoving ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Minus className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </>
+                    )}
+                    {isUpdatingRank && (
+                      <Loader2 className="w-3 h-3 animate-spin text-[#6c6c6c]" />
+                    )}
+                    {!isDraft && (
+                      <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] border border-[#dbe0ec] px-2 py-0.5">
                         Applied
                       </span>
                     )}
-                    {isApplied && isDraft && (
-                      <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] border border-[#dbe0ec] px-2 py-0.5 mt-2 inline-block">
-                        Selected
-                      </span>
-                    )}
                   </div>
-                </button>
-                <div className="flex items-center gap-2 shrink-0 ml-4">
-                  {isApplied && isDraft ? (
-                    <button
-                      onClick={() => handleRemovePosition(pos.id)}
-                      disabled={isRemoving}
-                      className="w-5 h-5 border border-black bg-black flex items-center justify-center hover:bg-red-600 hover:border-red-600 transition-colors disabled:opacity-50"
-                      title="Remove position"
-                    >
-                      {isRemoving ? (
-                        <Loader2 className="w-3 h-3 text-white animate-spin" />
-                      ) : (
-                        <Minus className="w-3 h-3 text-white" />
-                      )}
-                    </button>
-                  ) : (
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Search */}
+      {!isSubmitted && (
+        <>
+          <div className="relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6c6c6c] w-4 h-4" />
+            <input
+              type="text"
+              placeholder="Search positions..."
+              className="w-full border border-[#dbe0ec] bg-white pl-11 pr-4 py-3.5 font-['Radio_Canada_Big',sans-serif] text-sm text-black placeholder-[#6c6c6c] outline-none focus:border-black transition-colors"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+
+          {/* Position list */}
+          <div className="space-y-0 border border-[#dbe0ec]">
+            {filteredPositions.map((pos: any, i: number) => {
+              const isApplied = appliedPositionIds.has(pos.id);
+              const isSelected = selectedIds.has(pos.id) || isApplied;
+              const isRemoving = removingId === pos.id;
+              return (
+                <motion.div
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.06 }}
+                  key={pos.id}
+                  className={cn("p-6", i !== 0 && "border-t border-[#dbe0ec]")}
+                >
+                  <div className="w-full flex items-center justify-between text-left">
                     <button
                       onClick={() => {
                         if (!isApplied) toggleSelection(pos.id);
                       }}
-                      disabled={isApplied && !isDraft}
+                      disabled={isApplied}
                       className={cn(
-                        "w-5 h-5 border flex items-center justify-center",
-                        isSelected ? "border-black bg-black" : "border-[#dbe0ec]",
-                        isApplied && !isDraft && "opacity-70 cursor-not-allowed"
+                        "flex items-start gap-4 flex-1 text-left transition-colors",
+                        isApplied && "opacity-70 cursor-not-allowed"
                       )}
                     >
-                      {isSelected ? (
-                        <Check className="w-3 h-3 text-white" />
-                      ) : (
-                        <Plus className="w-3 h-3 text-[#6c6c6c]" />
-                      )}
+                      <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] mt-0.5 w-6 shrink-0">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3">
+                          <h3 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-lg tracking-[-0.3px]">
+                            {pos.title}
+                          </h3>
+                        </div>
+                        <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-base mt-0.5 tracking-[-0.2px]">
+                          {pos.description}
+                        </p>
+                        {isApplied && (
+                          <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] border border-[#dbe0ec] px-2 py-0.5 mt-2 inline-block">
+                            {(() => {
+                              const ap = appliedPositions.find((a: any) => a.position_id === pos.id);
+                              return `Preference #${ap?.position_rank ?? "—"}`;
+                            })()}
+                          </span>
+                        )}
+                      </div>
                     </button>
-                  )}
-                </div>
+                    <div className="flex items-center gap-2 shrink-0 ml-4">
+                      {!isApplied && (
+                        <button
+                          onClick={() => toggleSelection(pos.id)}
+                          className={cn(
+                            "w-5 h-5 border flex items-center justify-center",
+                            isSelected ? "border-black bg-black" : "border-[#dbe0ec]"
+                          )}
+                        >
+                          {isSelected ? (
+                            <Check className="w-3 h-3 text-white" />
+                          ) : (
+                            <Plus className="w-3 h-3 text-[#6c6c6c]" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
+            {filteredPositions.length === 0 && (
+              <div className="px-6 py-16 text-center">
+                <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-base">
+                  No positions matching "{searchTerm}"
+                </p>
               </div>
-            </motion.div>
-          );
-        })}
-        {filteredPositions.length === 0 && (
-          <div className="px-6 py-16 text-center">
-            <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-base">
-              No positions matching "{searchTerm}"
-            </p>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* Fixed footer */}
       {selectedIds.size > 0 && !isSubmitted && (
@@ -281,7 +420,7 @@ export function ApplicantPrograms() {
               {selectedIds.size} new position{selectedIds.size !== 1 ? "s" : ""} selected
             </span>
             <p className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] mt-0.5">
-              This will add the selected positions to your application.
+              New positions will be added after your current rankings.
             </p>
           </div>
           <button
