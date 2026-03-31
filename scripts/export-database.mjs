@@ -50,14 +50,14 @@ async function fetchAll(table, options = {}) {
     console.error(`Error fetching ${table}:`, error.message);
     return [];
   }
-  return data;
+  return data || [];
 }
 
 async function exportTable(name, options = {}) {
   console.log(`Exporting ${name}...`);
   const data = await fetchAll(name, options);
   if (data.length === 0) {
-    console.log(`  ${name}: no rows, skipping`);
+    console.log(`  ${name}: 0 rows (empty file with headers skipped)`);
     return;
   }
   writeFileSync(join(OUTPUT_DIR, `${name}.csv`), toCsv(data));
@@ -124,39 +124,55 @@ async function exportJoinedApplications() {
     }
   }
 
-  if (rows.length > 0) {
-    writeFileSync(join(OUTPUT_DIR, "applications_overview.csv"), toCsv(rows));
-    console.log(`  applications_overview: ${rows.length} rows`);
-  }
+  const csv = rows.length > 0
+    ? toCsv(rows)
+    : "application_id,user_id,first_name,last_name,email,phone,grade,student_number,application_status,submitted_at,created_at,position_title,position_status,position_rank";
+  writeFileSync(join(OUTPUT_DIR, "applications_overview.csv"), csv);
+  console.log(`  applications_overview: ${rows.length} rows`);
 }
 
 async function exportResponsesWithQuestions() {
   console.log("Exporting responses with questions...");
 
-  const { data, error } = await supabase
-    .from("responses")
-    .select("*, questions(prompt, type, position_id)");
+  // Fetch responses and questions separately, then join in JS
+  // This avoids issues with Supabase FK join detection
+  const [responsesResult, questionsResult] = await Promise.all([
+    supabase.from("responses").select("*"),
+    supabase.from("questions").select("*"),
+  ]);
 
-  if (error) {
-    console.error("Error fetching responses with questions:", error.message);
+  if (responsesResult.error) {
+    console.error("Error fetching responses:", responsesResult.error.message);
+    return;
+  }
+  if (questionsResult.error) {
+    console.error("Error fetching questions:", questionsResult.error.message);
     return;
   }
 
-  const rows = data.map((r) => ({
-    response_id: r.id,
-    application_id: r.application_id,
-    question_id: r.question_id,
-    question_prompt: r.questions?.prompt || "",
-    question_type: r.questions?.type || "",
-    question_position_id: r.questions?.position_id || "",
-    content: r.content,
-    updated_at: r.updated_at,
-  }));
+  const questionsMap = new Map(
+    questionsResult.data.map((q) => [q.id, q])
+  );
 
-  if (rows.length > 0) {
-    writeFileSync(join(OUTPUT_DIR, "responses_with_questions.csv"), toCsv(rows));
-    console.log(`  responses_with_questions: ${rows.length} rows`);
-  }
+  const rows = responsesResult.data.map((r) => {
+    const q = questionsMap.get(r.question_id) || {};
+    return {
+      response_id: r.id,
+      application_id: r.application_id,
+      question_id: r.question_id,
+      question_prompt: q.prompt || "",
+      question_type: q.type || "",
+      question_position_id: q.position_id || "",
+      content: r.content,
+      updated_at: r.updated_at,
+    };
+  });
+
+  const csv = rows.length > 0
+    ? toCsv(rows)
+    : "response_id,application_id,question_id,question_prompt,question_type,question_position_id,content,updated_at";
+  writeFileSync(join(OUTPUT_DIR, "responses_with_questions.csv"), csv);
+  console.log(`  responses_with_questions: ${rows.length} rows`);
 }
 
 async function main() {
