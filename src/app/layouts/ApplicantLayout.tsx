@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router";
 import { cn } from "../lib/utils";
 import { useAuth } from "../lib/AuthContext";
@@ -14,7 +15,51 @@ import {
   Calendar,
   Mail,
   LogOut,
+  X,
+  AlertTriangle,
 } from "lucide-react";
+
+const DEADLINE_REMINDER_START = Date.UTC(2026, 3, 11, 1, 59); // Apr 11, 2026 01:59 UTC
+const DEADLINE_EXTENDED_START = Date.UTC(2026, 3, 11, 5, 0);  // Apr 11, 2026 05:00 UTC
+const DEADLINE_EXTENDED_END   = Date.UTC(2026, 3, 14, 3, 59); // Apr 14, 2026 03:59 UTC (after Apr 13 11:59PM)
+
+function useDeadlineNotification() {
+  const [notification, setNotification] = useState<{ id: string; message: string } | null>(null);
+  const [dismissed, setDismissed] = useState<string | null>(null);
+
+  useEffect(() => {
+    const check = () => {
+      const now = Date.now();
+      if (now >= DEADLINE_EXTENDED_START && now < DEADLINE_EXTENDED_END) {
+        setNotification({ id: "deadline_extended", message: "Applications have been extended to Monday, April 13 at 11:59 PM." });
+      } else if (now >= DEADLINE_REMINDER_START && now < DEADLINE_EXTENDED_START) {
+        setNotification({ id: "deadline_reminder", message: "Applications are due in 2 hours! Make sure to review and submit before the deadline." });
+      } else {
+        setNotification(null);
+      }
+    };
+    check();
+    const interval = setInterval(check, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (notification) {
+      const stored = localStorage.getItem(`notif_dismissed_${notification.id}`);
+      setDismissed(stored);
+    }
+  }, [notification?.id]);
+
+  const dismiss = () => {
+    if (notification) {
+      localStorage.setItem(`notif_dismissed_${notification.id}`, "1");
+      setDismissed("1");
+    }
+  };
+
+  const visible = notification && dismissed !== "1";
+  return { notification: visible ? notification : null, dismiss };
+}
 
 const NAV_SECTIONS = [
   {
@@ -98,6 +143,8 @@ export function ApplicantLayout() {
   // Get all applied positions for sidebar display (show even if 0 position-specific questions)
   const appliedPositionsForSidebar = appPositions
     .map((ap: any) => ({ id: ap.position_id, title: ap.positions?.title, questionCount: positionQuestionMap[ap.position_id]?.length || 0 }));
+
+  const { notification, dismiss: dismissNotification } = useDeadlineNotification();
 
   return (
     <div className="flex min-h-screen bg-white text-black" style={{ fontFamily: "'Radio Canada Big', sans-serif" }}>
@@ -225,6 +272,22 @@ export function ApplicantLayout() {
 
       {/* Main Content */}
       <main className="flex-1 ml-60 min-h-screen bg-white">
+        {notification && (
+          <div className="bg-black text-white px-6 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-4 h-4 text-white shrink-0" />
+              <p className="font-['Radio_Canada_Big',sans-serif] text-sm">
+                {notification.message}
+              </p>
+            </div>
+            <button
+              onClick={dismissNotification}
+              className="text-white/60 hover:text-white transition-colors shrink-0 ml-4"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
         <div className="max-w-4xl mx-auto px-10 py-10">
           <Outlet />
         </div>
