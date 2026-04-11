@@ -58,16 +58,13 @@ export function ApplicantPrograms() {
   );
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  const isDraft = !application || application.status === "draft";
-  const isSubmitted = application && application.status !== "draft";
-
   // Get applied positions sorted by rank
   const appliedPositions: any[] = (application?.application_positions ?? [])
     .slice()
     .sort((a: any, b: any) => (a.position_rank ?? 999) - (b.position_rank ?? 999));
 
   const toggleSelection = (positionId: string) => {
-    if (isSubmitted || appliedPositionIds.has(positionId)) return;
+    if (deadlinePassed || appliedPositionIds.has(positionId)) return;
     const newSet = new Set(selectedIds);
     if (newSet.has(positionId)) {
       newSet.delete(positionId);
@@ -78,7 +75,7 @@ export function ApplicantPrograms() {
   };
 
   const handleRemovePosition = async (positionId: string) => {
-    if (!application || !isDraft) return;
+    if (!application || deadlinePassed) return;
     setRemovingId(positionId);
     const { error } = await supabase
       .from("application_positions")
@@ -108,7 +105,7 @@ export function ApplicantPrograms() {
   };
 
   const handleMoveRank = async (applicationPositionId: string, direction: "up" | "down") => {
-    if (!application || !isDraft) return;
+    if (!application || deadlinePassed) return;
     setRankUpdating(applicationPositionId);
 
     const currentIndex = appliedPositions.findIndex((ap: any) => ap.id === applicationPositionId);
@@ -265,9 +262,9 @@ export function ApplicantPrograms() {
         </p>
       </header>
 
-      {isSubmitted && (
+      {deadlinePassed && (
         <div className="border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4">
-          <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">Your application has been submitted. This section is locked.</p>
+          <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">The application deadline has passed. This section is locked.</p>
         </div>
       )}
 
@@ -283,9 +280,9 @@ export function ApplicantPrograms() {
             </span>
           </div>
           <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm mb-4 tracking-[-0.2px]">
-            {isDraft
+            {!deadlinePassed
               ? "Use the arrows to rank your positions by preference. #1 is your most preferred."
-              : "Your submitted preference ranking is shown below."}
+              : "Your preference ranking is shown below."}
           </p>
           <div className="border border-[#dbe0ec]">
             {appliedPositions.map((ap: any, i: number) => {
@@ -311,7 +308,7 @@ export function ApplicantPrograms() {
                   </div>
                   {/* Controls */}
                   <div className="flex items-center gap-1 shrink-0">
-                    {isDraft && (
+                    {!deadlinePassed && (
                       <>
                         <button
                           onClick={() => handleMoveRank(ap.id, "up")}
@@ -356,7 +353,7 @@ export function ApplicantPrograms() {
                     {isUpdatingRank && (
                       <Loader2 className="w-3 h-3 animate-spin text-[#6c6c6c]" />
                     )}
-                    {!isDraft && (
+                    {deadlinePassed && (
                       <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] border border-[#dbe0ec] px-2 py-0.5">
                         Applied
                       </span>
@@ -370,7 +367,7 @@ export function ApplicantPrograms() {
       )}
 
       {/* Search */}
-      {!isSubmitted && (
+      {!deadlinePassed && (
         <>
           <div className="relative">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#6c6c6c] w-4 h-4" />
@@ -463,7 +460,7 @@ export function ApplicantPrograms() {
       )}
 
       {/* Fixed footer */}
-      {selectedIds.size > 0 && !isSubmitted && (
+      {selectedIds.size > 0 && !deadlinePassed && (
         <div className="fixed bottom-0 left-60 right-0 bg-white border-t border-[#dbe0ec] px-8 py-4 flex justify-between items-center z-20">
           <div>
             <span className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm">

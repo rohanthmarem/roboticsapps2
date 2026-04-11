@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../../lib/AuthContext";
-import { useApplication } from "../../lib/hooks";
+import { useDeadlinePassed } from "../../lib/hooks";
 import { supabase } from "../../lib/supabase";
 import { GRADE_LEVELS } from "../../data";
 import { cn } from "../../lib/utils";
@@ -19,8 +19,7 @@ const labelCls =
 
 export function ApplicantProfile() {
     const { profile, refreshProfile } = useAuth();
-    const { application } = useApplication(profile?.id);
-    const isSubmitted = application && application.status !== "draft";
+    const isSubmitted = useDeadlinePassed();
     const navigate = useNavigate();
     const [saving, setSaving] = useState(false);
     const [autoSaveState, setAutoSaveState] = useState<
@@ -186,7 +185,7 @@ export function ApplicantProfile() {
             {isSubmitted && (
                 <div className="border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4">
                     <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">
-                        Your application has been submitted. This section is
+                        The application deadline has passed. This section is
                         locked.
                     </p>
                 </div>

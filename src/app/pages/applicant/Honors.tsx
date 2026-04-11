@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { Plus, Trash2, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../../lib/AuthContext";
-import { useApplication } from "../../lib/hooks";
+import { useApplication, useDeadlinePassed } from "../../lib/hooks";
 import { useDataContext } from "../../lib/DataContext";
 import { supabase } from "../../lib/supabase";
 import { GRADE_LEVELS, RECOGNITION_LEVELS } from "../../data";
@@ -29,7 +29,7 @@ export function ApplicantHonors() {
   const { profile } = useAuth();
   const { application } = useApplication(profile?.id);
   const { refetchProgressCounts } = useDataContext();
-  const isSubmitted = application && application.status !== "draft";
+  const isSubmitted = useDeadlinePassed();
   const navigate = useNavigate();
   const [honors, setHonors] = useState<HonorItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -201,7 +201,7 @@ export function ApplicantHonors() {
 
       {isSubmitted && (
         <div className="border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4">
-          <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">Your application has been submitted. This section is locked.</p>
+          <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">The application deadline has passed. This section is locked.</p>
         </div>
       )}
 
