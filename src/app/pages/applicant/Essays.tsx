@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../../lib/AuthContext";
-import { useQuestions, useApplication, useSettings } from "../../lib/hooks";
+import { useQuestions, useApplication, useSettings, useDeadlinePassed } from "../../lib/hooks";
 import { supabase } from "../../lib/supabase";
 import { cn } from "../../lib/utils";
 
@@ -12,7 +12,7 @@ export function ApplicantEssays() {
   const { profile } = useAuth();
   const { questions, loading: qLoading } = useQuestions();
   const { application, loading: appsLoading } = useApplication(profile?.id);
-  const isSubmitted = application && application.status !== "draft";
+  const isSubmitted = useDeadlinePassed();
   const { settings } = useSettings();
   const navigate = useNavigate();
 
@@ -325,7 +325,7 @@ export function ApplicantEssays() {
 
       {isSubmitted && (
         <div className="border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4">
-          <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">Your application has been submitted. This section is locked.</p>
+          <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">The application deadline has passed. This section is locked.</p>
         </div>
       )}
 

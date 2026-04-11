@@ -1,3 +1,4 @@
+import { parseISO } from "date-fns";
 import { useDataContext } from "./DataContext";
 
 export function useSettings() {
@@ -26,4 +27,20 @@ export function useApplication(_userId?: string) {
 export function useAllApplications() {
   const { allApplications, allApplicationsLoading, refetchAllApplications } = useDataContext();
   return { applications: allApplications, loading: allApplicationsLoading, refetch: refetchAllApplications };
+}
+
+// Returns true if the application deadline has passed (end-of-day on deadline date)
+export function useDeadlinePassed(): boolean {
+  const { settings } = useSettings();
+  const deadlineStr = typeof settings.application_deadline === "string" ? settings.application_deadline : null;
+  if (!deadlineStr) return false;
+  try {
+    const d = parseISO(deadlineStr);
+    if (isNaN(d.getTime())) return false;
+    const endOfDeadline = new Date(d);
+    endOfDeadline.setHours(23, 59, 59, 999);
+    return new Date() > endOfDeadline;
+  } catch {
+    return false;
+  }
 }
