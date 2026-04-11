@@ -68,6 +68,23 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => { fetchSettings(); }, [fetchSettings]);
 
+  // Realtime subscription for settings changes (enables instant maintenance mode)
+  useEffect(() => {
+    const channel = supabase
+      .channel("settings-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "settings" },
+        (payload: any) => {
+          if (payload.new && payload.new.key) {
+            setSettings((prev) => ({ ...prev, [payload.new.key]: payload.new.value }));
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   // --- Positions ---
   const [positions, setPositions] = useState<any[]>([]);
   const [positionsLoading, setPositionsLoading] = useState(true);

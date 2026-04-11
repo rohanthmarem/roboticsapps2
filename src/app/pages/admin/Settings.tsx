@@ -16,6 +16,7 @@ export function AdminSettings() {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const [maintenanceMode, setMaintenanceMode] = useState(false);
     const [appWindowOpen, setAppWindowOpen] = useState(false);
     const [interviewsOpen, setInterviewsOpen] = useState(false);
     const [aiAnalysisEnabled, setAiAnalysisEnabled] = useState(false);
@@ -33,6 +34,10 @@ export function AdminSettings() {
 
     useEffect(() => {
         if (!loading) {
+            setMaintenanceMode(
+                settings.maintenance_mode === true ||
+                    settings.maintenance_mode === "true",
+            );
             setAppWindowOpen(
                 settings.application_window_open === true ||
                     settings.application_window_open === "true",
@@ -176,6 +181,46 @@ export function AdminSettings() {
                     </button>
                 </div>
             )}
+
+            {/* Maintenance Mode */}
+            <section>
+                <div className="flex items-center justify-between mb-4">
+                    <h2 className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-base">
+                        Maintenance Mode
+                    </h2>
+                    <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">
+                        000
+                    </span>
+                </div>
+                <div className={`border px-6 py-5 flex items-center justify-between ${maintenanceMode ? "border-red-400 bg-red-50" : "border-[#dbe0ec]"}`}>
+                    <div className="flex items-start gap-4">
+                        <span className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c] w-6 mt-0.5">
+                            !!
+                        </span>
+                        <div>
+                            <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm">
+                                Error 67 — Shut Down Site
+                            </p>
+                            <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-sm mt-0.5">
+                                Instantly replaces all pages with "Error 67" for every user. Unsaved data is preserved underneath.
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={async () => {
+                            const next = !maintenanceMode;
+                            setMaintenanceMode(next);
+                            await updateSetting("maintenance_mode", next);
+                            toast.success(next ? "Maintenance mode ON — site is down" : "Maintenance mode OFF — site is live");
+                        }}
+                        className={`relative w-12 h-6 transition-colors shrink-0 ${maintenanceMode ? "bg-red-500" : "bg-[#dbe0ec]"}`}
+                    >
+                        <div
+                            className={`absolute top-1 w-4 h-4 bg-white transition-all ${maintenanceMode ? "left-7" : "left-1"}`}
+                        />
+                    </button>
+                </div>
+            </section>
 
             {/* Cycle States */}
             <section>
