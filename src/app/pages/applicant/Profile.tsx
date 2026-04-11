@@ -19,7 +19,7 @@ const labelCls =
 
 export function ApplicantProfile() {
     const { profile, refreshProfile } = useAuth();
-    const isSubmitted = useDeadlinePassed();
+    const deadlinePassed = useDeadlinePassed();
     const navigate = useNavigate();
     const [saving, setSaving] = useState(false);
     const [autoSaveState, setAutoSaveState] = useState<
@@ -182,7 +182,7 @@ export function ApplicantProfile() {
                 </div>
             </header>
 
-            {isSubmitted && (
+            {deadlinePassed && (
                 <div className="border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4">
                     <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">
                         The application deadline has passed. This section is
@@ -213,7 +213,7 @@ export function ApplicantProfile() {
                                 isFieldError("first_name")
                                     ? "border-red-400"
                                     : "border-[#dbe0ec]",
-                                isSubmitted && "opacity-60 cursor-not-allowed",
+                                deadlinePassed && "opacity-60 cursor-not-allowed",
                             )}
                             value={form.first_name}
                             onChange={(e) =>
@@ -221,7 +221,7 @@ export function ApplicantProfile() {
                             }
                             onBlur={() => handleBlur("first_name")}
                             placeholder="Your first name"
-                            disabled={!!isSubmitted}
+                            disabled={!!deadlinePassed}
                         />
                         {isFieldError("first_name") && (
                             <p className="font-['Geist_Mono',monospace] text-[10px] text-red-500 mt-1">
@@ -239,7 +239,7 @@ export function ApplicantProfile() {
                                 isFieldError("last_name")
                                     ? "border-red-400"
                                     : "border-[#dbe0ec]",
-                                isSubmitted && "opacity-60 cursor-not-allowed",
+                                deadlinePassed && "opacity-60 cursor-not-allowed",
                             )}
                             value={form.last_name}
                             onChange={(e) =>
@@ -247,7 +247,7 @@ export function ApplicantProfile() {
                             }
                             onBlur={() => handleBlur("last_name")}
                             placeholder="Your last name"
-                            disabled={!!isSubmitted}
+                            disabled={!!deadlinePassed}
                         />
                         {isFieldError("last_name") && (
                             <p className="font-['Geist_Mono',monospace] text-[10px] text-red-500 mt-1">
@@ -276,14 +276,14 @@ export function ApplicantProfile() {
                             className={cn(
                                 selectCls,
                                 isFieldError("grade") ? "border-red-400" : "",
-                                isSubmitted && "opacity-60 cursor-not-allowed",
+                                deadlinePassed && "opacity-60 cursor-not-allowed",
                             )}
                             value={form.grade}
                             onChange={(e) =>
                                 handleChange("grade", e.target.value)
                             }
                             onBlur={() => handleBlur("grade")}
-                            disabled={!!isSubmitted}
+                            disabled={!!deadlinePassed}
                         >
                             <option value="">Select Grade</option>
                             {GRADE_LEVELS.map((g) => (
@@ -311,10 +311,10 @@ export function ApplicantProfile() {
                 </button>
                 <button
                     onClick={handleSaveAndContinue}
-                    disabled={saving || !!isSubmitted}
+                    disabled={saving || !!deadlinePassed}
                     className={cn(
                         "bg-black flex gap-[10px] items-center justify-center px-5 py-3.5 hover:bg-zinc-800 transition-colors disabled:opacity-50",
-                        isSubmitted && "cursor-not-allowed",
+                        deadlinePassed && "cursor-not-allowed",
                     )}
                 >
                     {saving ? (

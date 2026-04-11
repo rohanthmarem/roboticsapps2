@@ -4,7 +4,7 @@ import { Reorder } from "motion/react";
 import { GripVertical, Plus, Trash2, ChevronDown, ChevronUp, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../../lib/AuthContext";
-import { useApplication, useDeadlinePassed } from "../../lib/hooks";
+import { useDeadlinePassed } from "../../lib/hooks";
 import { useDataContext } from "../../lib/DataContext";
 import { supabase } from "../../lib/supabase";
 import { ACTIVITY_TYPES } from "../../data";
@@ -34,9 +34,8 @@ interface ActivityItem {
 
 export function ApplicantActivities() {
   const { profile } = useAuth();
-  const { application } = useApplication(profile?.id);
   const { refetchProgressCounts } = useDataContext();
-  const isSubmitted = useDeadlinePassed();
+  const deadlinePassed = useDeadlinePassed();
   const navigate = useNavigate();
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -161,7 +160,7 @@ export function ApplicantActivities() {
   }, []);
 
   const addActivity = () => {
-    if (isSubmitted || activities.length >= 10) return;
+    if (deadlinePassed || activities.length >= 10) return;
     const newActivities = [
       ...activities,
       {
@@ -182,7 +181,7 @@ export function ApplicantActivities() {
   };
 
   const removeActivity = (id: string) => {
-    if (isSubmitted) return;
+    if (deadlinePassed) return;
     const newActivities = activities.filter((a) => a.id !== id);
     setActivities(newActivities);
     triggerAutoSave(newActivities);
@@ -193,7 +192,7 @@ export function ApplicantActivities() {
   };
 
   const updateField = (index: number, field: string, value: any) => {
-    if (isSubmitted) return;
+    if (deadlinePassed) return;
     const newAct = [...activities];
     (newAct[index] as any)[field] = value;
     setActivities(newAct);
@@ -201,7 +200,7 @@ export function ApplicantActivities() {
   };
 
   const handleReorder = (newOrder: ActivityItem[]) => {
-    if (isSubmitted) return;
+    if (deadlinePassed) return;
     setActivities(newOrder);
     triggerAutoSave(newOrder);
   };
@@ -280,7 +279,7 @@ export function ApplicantActivities() {
         </div>
       </header>
 
-      {isSubmitted && (
+      {deadlinePassed && (
         <div className="border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4">
           <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">The application deadline has passed. This section is locked.</p>
         </div>
@@ -296,8 +295,8 @@ export function ApplicantActivities() {
           </p>
           <button
             onClick={addActivity}
-            disabled={!!isSubmitted}
-            className={cn("bg-black flex gap-[10px] items-center justify-center px-5 py-3.5 hover:bg-zinc-800 transition-colors disabled:opacity-50", isSubmitted && "cursor-not-allowed")}
+            disabled={!!deadlinePassed}
+            className={cn("bg-black flex gap-[10px] items-center justify-center px-5 py-3.5 hover:bg-zinc-800 transition-colors disabled:opacity-50", deadlinePassed && "cursor-not-allowed")}
           >
             <div className="bg-white shrink-0 w-[5px] h-[5px]" />
             <span className="font-['Geist_Mono',monospace] text-[13px] text-white whitespace-nowrap leading-none">
@@ -315,7 +314,7 @@ export function ApplicantActivities() {
                 className="border border-[#dbe0ec] bg-white overflow-hidden"
               >
                 <div className="flex">
-                  <div className={cn("bg-[#f9f9f7] w-10 flex items-center justify-center border-r border-[#dbe0ec] transition-colors", isSubmitted ? "cursor-not-allowed opacity-60" : "cursor-grab active:cursor-grabbing hover:bg-[#f0f0ee]")}>
+                  <div className={cn("bg-[#f9f9f7] w-10 flex items-center justify-center border-r border-[#dbe0ec] transition-colors", deadlinePassed ? "cursor-not-allowed opacity-60" : "cursor-grab active:cursor-grabbing hover:bg-[#f0f0ee]")}>
                     <GripVertical className="w-4 h-4 text-[#6c6c6c]" />
                   </div>
                   <div className="flex-1">
@@ -346,7 +345,7 @@ export function ApplicantActivities() {
                             {getMissingFields(activity).length} missing
                           </span>
                         )}
-                        {!isSubmitted && (
+                        {!deadlinePassed && (
                         <button
                           className="p-1.5 text-[#6c6c6c] hover:text-black transition-colors"
                           onClick={(e) => { e.stopPropagation(); removeActivity(activity.id); }}
@@ -451,7 +450,7 @@ export function ApplicantActivities() {
             ))}
           </Reorder.Group>
 
-          {activities.length < 10 && !isSubmitted && (
+          {activities.length < 10 && !deadlinePassed && (
             <button onClick={addActivity} className="w-full border border-dashed border-[#dbe0ec] py-4 flex items-center justify-center gap-2 hover:border-black transition-colors">
               <Plus className="w-4 h-4 text-[#6c6c6c]" />
               <span className="font-['Geist_Mono',monospace] text-[12px] text-[#6c6c6c]">Add Another Activity</span>
@@ -465,7 +464,7 @@ export function ApplicantActivities() {
         <button onClick={() => navigate("/applicant/profile")} className="font-['Geist_Mono',monospace] text-[12px] text-[#6c6c6c] hover:text-black transition-colors">
           ← Back
         </button>
-        <button onClick={handleSaveAndContinue} disabled={saving || !!isSubmitted} className={cn("bg-black flex gap-[10px] items-center justify-center px-5 py-3.5 hover:bg-zinc-800 transition-colors disabled:opacity-50", isSubmitted && "cursor-not-allowed")}>
+        <button onClick={handleSaveAndContinue} disabled={saving || !!deadlinePassed} className={cn("bg-black flex gap-[10px] items-center justify-center px-5 py-3.5 hover:bg-zinc-800 transition-colors disabled:opacity-50", deadlinePassed && "cursor-not-allowed")}>
           {saving ? <Loader2 className="w-4 h-4 text-white animate-spin" /> : (
             <>
               <div className="bg-white shrink-0 w-[5px] h-[5px]" />

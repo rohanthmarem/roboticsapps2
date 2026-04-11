@@ -12,7 +12,7 @@ export function ApplicantEssays() {
   const { profile } = useAuth();
   const { questions, loading: qLoading } = useQuestions();
   const { application, loading: appsLoading } = useApplication(profile?.id);
-  const isSubmitted = useDeadlinePassed();
+  const isDeadlineLocked = useDeadlinePassed();
   const { settings } = useSettings();
   const navigate = useNavigate();
 
@@ -115,7 +115,7 @@ export function ApplicantEssays() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    if (isSubmitted || savingState !== "saving") return;
+    if (isDeadlineLocked || savingState !== "saving") return;
     saveTimerRef.current = setTimeout(async () => {
       try {
         await saveAll(responsesRef.current);
@@ -125,7 +125,7 @@ export function ApplicantEssays() {
       }
     }, 1000);
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
-  }, [savingState, saveAll, isSubmitted]);
+  }, [savingState, saveAll, isDeadlineLocked]);
 
   // Save on visibility change (tab switch) — clear debounce first to prevent double-save
   useEffect(() => {
@@ -215,12 +215,12 @@ export function ApplicantEssays() {
                 "w-full border bg-[#f9f9f7] px-5 py-4 font-['Source_Serif_4',serif] text-base text-black leading-relaxed tracking-[-0.2px] resize-y outline-none transition-colors placeholder-[#6c6c6c]",
                 q.type === "short_text" ? "min-h-[80px]" : "min-h-[200px]",
                 isOverLimit ? "border-red-400" : "border-[#dbe0ec] focus:border-black",
-                isSubmitted && "opacity-60 cursor-not-allowed"
+                isDeadlineLocked && "opacity-60 cursor-not-allowed"
               )}
               value={content}
               onChange={(e) => isGeneral ? handleGeneralChange(q.id, e.target.value) : handleChange(applicationId, q.id, e.target.value)}
               placeholder="Start writing here..."
-              disabled={!!isSubmitted}
+              disabled={!!isDeadlineLocked}
             />
             <div className="flex justify-end mt-2">
               <span className={cn("font-['Geist_Mono',monospace] text-[11px]", isOverLimit ? "text-red-500" : isNearLimit ? "text-black" : "text-[#6c6c6c]")}>
@@ -230,10 +230,10 @@ export function ApplicantEssays() {
           </>
         ) : q.type === "select" ? (
           <select
-            className={cn("w-full border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4 font-['Radio_Canada_Big',sans-serif] text-sm text-black outline-none focus:border-black transition-colors", isSubmitted && "opacity-60 cursor-not-allowed")}
+            className={cn("w-full border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4 font-['Radio_Canada_Big',sans-serif] text-sm text-black outline-none focus:border-black transition-colors", isDeadlineLocked && "opacity-60 cursor-not-allowed")}
             value={content}
             onChange={(e) => isGeneral ? handleGeneralChange(q.id, e.target.value) : handleChange(applicationId, q.id, e.target.value)}
-            disabled={!!isSubmitted}
+            disabled={!!isDeadlineLocked}
           >
             <option value="">Select an option...</option>
             {(q.options || []).map((opt: string) => (
@@ -255,7 +255,7 @@ export function ApplicantEssays() {
                     type="checkbox"
                     className="sr-only"
                     checked={isChecked}
-                    disabled={!!isSubmitted}
+                    disabled={!!isDeadlineLocked}
                     onChange={() => {
                       const newVal = isChecked ? selected.filter((s) => s !== opt).join(",") : [...selected, opt].join(",");
                       isGeneral ? handleGeneralChange(q.id, newVal) : handleChange(applicationId, q.id, newVal);
@@ -269,14 +269,14 @@ export function ApplicantEssays() {
           <input
             type="text"
             inputMode="numeric"
-            className={cn("w-full border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4 font-['Geist_Mono',monospace] text-base text-black outline-none focus:border-black transition-colors placeholder-[#6c6c6c]", isSubmitted && "opacity-60 cursor-not-allowed")}
+            className={cn("w-full border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4 font-['Geist_Mono',monospace] text-base text-black outline-none focus:border-black transition-colors placeholder-[#6c6c6c]", isDeadlineLocked && "opacity-60 cursor-not-allowed")}
             value={content}
             onChange={(e) => {
               const val = e.target.value.replace(/[^0-9.-]/g, "");
               isGeneral ? handleGeneralChange(q.id, val) : handleChange(applicationId, q.id, val);
             }}
             placeholder="0"
-            disabled={!!isSubmitted}
+            disabled={!!isDeadlineLocked}
           />
         ) : null}
       </motion.div>
@@ -323,7 +323,7 @@ export function ApplicantEssays() {
         </div>
       </header>
 
-      {isSubmitted && (
+      {isDeadlineLocked && (
         <div className="border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4">
           <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">The application deadline has passed. This section is locked.</p>
         </div>

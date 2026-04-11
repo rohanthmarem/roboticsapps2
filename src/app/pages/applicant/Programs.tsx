@@ -5,7 +5,7 @@ import { Search, Check, Plus, Minus, Loader2, ChevronUp, ChevronDown } from "luc
 import { toast } from "sonner";
 import { parseISO, format } from "date-fns";
 import { useAuth } from "../../lib/AuthContext";
-import { usePositions, useApplication, useSettings } from "../../lib/hooks";
+import { usePositions, useApplication, useSettings, useDeadlinePassed } from "../../lib/hooks";
 import { supabase } from "../../lib/supabase";
 import { cn } from "../../lib/utils";
 
@@ -32,25 +32,10 @@ export function ApplicantPrograms() {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [rankUpdating, setRankUpdating] = useState<string | null>(null);
 
+  const deadlinePassed = useDeadlinePassed();
   const manualWindowOpen = settings.application_window_open === true || settings.application_window_open === "true";
-
-  // Also check if we're past the deadline date
-  const deadlineStr = typeof settings.application_deadline === "string" ? settings.application_deadline : null;
-  const deadlinePassed = (() => {
-    if (!deadlineStr) return false;
-    try {
-      const d = parseISO(deadlineStr);
-      if (isNaN(d.getTime())) return false;
-      // Deadline is end-of-day, so add a day buffer
-      const endOfDeadline = new Date(d);
-      endOfDeadline.setHours(23, 59, 59, 999);
-      return new Date() > endOfDeadline;
-    } catch {
-      return false;
-    }
-  })();
-
   const appWindowOpen = manualWindowOpen && !deadlinePassed;
+  const deadlineStr = typeof settings.application_deadline === "string" ? settings.application_deadline : null;
   const deadlineDisplay = formatDeadline(deadlineStr);
 
   const appliedPositionIds = new Set(

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router";
 import { Plus, Trash2, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "../../lib/AuthContext";
-import { useApplication, useDeadlinePassed } from "../../lib/hooks";
+import { useDeadlinePassed } from "../../lib/hooks";
 import { useDataContext } from "../../lib/DataContext";
 import { supabase } from "../../lib/supabase";
 import { GRADE_LEVELS, RECOGNITION_LEVELS } from "../../data";
@@ -27,9 +27,8 @@ interface HonorItem {
 
 export function ApplicantHonors() {
   const { profile } = useAuth();
-  const { application } = useApplication(profile?.id);
   const { refetchProgressCounts } = useDataContext();
-  const isSubmitted = useDeadlinePassed();
+  const isDeadlinePassed = useDeadlinePassed();
   const navigate = useNavigate();
   const [honors, setHonors] = useState<HonorItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -125,21 +124,21 @@ export function ApplicantHonors() {
   }, [doSave, profile]);
 
   const addHonor = () => {
-    if (isSubmitted || honors.length >= 5) return;
+    if (isDeadlinePassed || honors.length >= 5) return;
     const newHonors = [...honors, { id: crypto.randomUUID(), title: "", grade_level: "", recognition_level: "" }];
     setHonors(newHonors);
     triggerAutoSave(newHonors);
   };
 
   const removeHonor = (id: string) => {
-    if (isSubmitted) return;
+    if (isDeadlinePassed) return;
     const newHonors = honors.filter((h) => h.id !== id);
     setHonors(newHonors);
     triggerAutoSave(newHonors);
   };
 
   const updateHonor = (id: string, field: string, value: string) => {
-    if (isSubmitted) return;
+    if (isDeadlinePassed) return;
     const newHonors = honors.map((h) => (h.id === id ? { ...h, [field]: value } : h));
     setHonors(newHonors);
     triggerAutoSave(newHonors);
@@ -199,7 +198,7 @@ export function ApplicantHonors() {
         </div>
       </header>
 
-      {isSubmitted && (
+      {isDeadlinePassed && (
         <div className="border border-[#dbe0ec] bg-[#f9f9f7] px-5 py-4">
           <p className="font-['Geist_Mono',monospace] text-[11px] text-[#6c6c6c]">The application deadline has passed. This section is locked.</p>
         </div>
@@ -209,7 +208,7 @@ export function ApplicantHonors() {
         <div className="border border-dashed border-[#dbe0ec] p-16 flex flex-col items-center text-center">
           <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-lg mb-2">No Honors Added</p>
           <p className="font-['Source_Serif_4',serif] text-[#6c6c6c] text-base mb-6 max-w-sm">Add any recognitions or awards you are proud of.</p>
-          <button onClick={addHonor} disabled={!!isSubmitted} className={cn("bg-black flex gap-[10px] items-center justify-center px-5 py-3.5 hover:bg-zinc-800 transition-colors disabled:opacity-50", isSubmitted && "cursor-not-allowed")}>
+          <button onClick={addHonor} disabled={!!isDeadlinePassed} className={cn("bg-black flex gap-[10px] items-center justify-center px-5 py-3.5 hover:bg-zinc-800 transition-colors disabled:opacity-50", isDeadlinePassed && "cursor-not-allowed")}>
             <div className="bg-white shrink-0 w-[5px] h-[5px]" />
             <span className="font-['Geist_Mono',monospace] text-[13px] text-white whitespace-nowrap leading-none">Add First Honor</span>
           </button>
@@ -225,18 +224,18 @@ export function ApplicantHonors() {
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-4">
                   <div className="md:col-span-6">
                     <label className={labelCls}>Honor Title <span className="text-red-500">*</span> ({honor.title.length}/100)</label>
-                    <input className={cn(fieldCls, !honor.title.trim() && "border-red-400", isSubmitted && "opacity-60 cursor-not-allowed")} value={honor.title} onChange={(e) => updateHonor(honor.id, "title", e.target.value)} placeholder="e.g. Skills Ontario Robotics Award" maxLength={100} disabled={!!isSubmitted} />
+                    <input className={cn(fieldCls, !honor.title.trim() && "border-red-400", isDeadlinePassed && "opacity-60 cursor-not-allowed")} value={honor.title} onChange={(e) => updateHonor(honor.id, "title", e.target.value)} placeholder="e.g. Skills Ontario Robotics Award" maxLength={100} disabled={!!isDeadlinePassed} />
                   </div>
                   <div className="md:col-span-3">
                     <label className={labelCls}>Grade Level <span className="text-red-500">*</span></label>
-                    <select className={cn(selectCls, !honor.grade_level && "border-red-400", isSubmitted && "opacity-60 cursor-not-allowed")} value={honor.grade_level} onChange={(e) => updateHonor(honor.id, "grade_level", e.target.value)} disabled={!!isSubmitted}>
+                    <select className={cn(selectCls, !honor.grade_level && "border-red-400", isDeadlinePassed && "opacity-60 cursor-not-allowed")} value={honor.grade_level} onChange={(e) => updateHonor(honor.id, "grade_level", e.target.value)} disabled={!!isDeadlinePassed}>
                       <option value="">Select</option>
                       {GRADE_LEVELS.map((g) => <option key={g} value={g}>{g}</option>)}
                     </select>
                   </div>
                   <div className="md:col-span-3">
                     <label className={labelCls}>Recognition Level <span className="text-red-500">*</span></label>
-                    <select className={cn(selectCls, !honor.recognition_level && "border-red-400", isSubmitted && "opacity-60 cursor-not-allowed")} value={honor.recognition_level} onChange={(e) => updateHonor(honor.id, "recognition_level", e.target.value)} disabled={!!isSubmitted}>
+                    <select className={cn(selectCls, !honor.recognition_level && "border-red-400", isDeadlinePassed && "opacity-60 cursor-not-allowed")} value={honor.recognition_level} onChange={(e) => updateHonor(honor.id, "recognition_level", e.target.value)} disabled={!!isDeadlinePassed}>
                       <option value="">Select</option>
                       {RECOGNITION_LEVELS.map((r) => <option key={r} value={r}>{r}</option>)}
                     </select>
@@ -246,7 +245,7 @@ export function ApplicantHonors() {
                   {(!honor.title.trim() || !honor.grade_level || !honor.recognition_level) && (
                     <AlertCircle className="w-3.5 h-3.5 text-red-500" />
                   )}
-                  {!isSubmitted && (
+                  {!isDeadlinePassed && (
                   <button onClick={() => removeHonor(honor.id)} className="p-1.5 text-[#6c6c6c] hover:text-black transition-colors">
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -255,7 +254,7 @@ export function ApplicantHonors() {
               </div>
             </div>
           ))}
-          {honors.length < 5 && !isSubmitted && (
+          {honors.length < 5 && !isDeadlinePassed && (
             <button onClick={addHonor} className="w-full border-t border-dashed border-[#dbe0ec] py-4 flex items-center justify-center gap-2 hover:bg-[#f9f9f7] transition-colors">
               <Plus className="w-4 h-4 text-[#6c6c6c]" />
               <span className="font-['Geist_Mono',monospace] text-[12px] text-[#6c6c6c]">Add Another Honor</span>
@@ -268,7 +267,7 @@ export function ApplicantHonors() {
         <button onClick={() => navigate("/applicant/responses")} className="font-['Geist_Mono',monospace] text-[12px] text-[#6c6c6c] hover:text-black transition-colors">
           ← Back
         </button>
-        <button onClick={handleSaveAndContinue} disabled={saving || !!isSubmitted} className={cn("bg-black flex gap-[10px] items-center justify-center px-5 py-3.5 hover:bg-zinc-800 transition-colors disabled:opacity-50", isSubmitted && "cursor-not-allowed")}>
+        <button onClick={handleSaveAndContinue} disabled={saving || !!isDeadlinePassed} className={cn("bg-black flex gap-[10px] items-center justify-center px-5 py-3.5 hover:bg-zinc-800 transition-colors disabled:opacity-50", isDeadlinePassed && "cursor-not-allowed")}>
           {saving ? <Loader2 className="w-4 h-4 text-white animate-spin" /> : (
             <>
               <div className="bg-white shrink-0 w-[5px] h-[5px]" />
