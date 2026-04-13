@@ -10,6 +10,7 @@ import {
   PenTool,
   FileText,
   Sparkles,
+  Trophy,
 } from "lucide-react";
 
 const ADMIN_NAV = [
@@ -20,6 +21,7 @@ const ADMIN_NAV = [
   { path: "/admin/responses", icon: FileText, label: "Responses", num: "05" },
   { path: "/admin/ai-analysis", icon: Sparkles, label: "AI Analysis", num: "06" },
   { path: "/admin/settings", icon: Settings, label: "Settings", num: "07" },
+  { path: "/admin/rankings", icon: Trophy, label: "Rankings", num: "08" },
 ];
 
 export function AdminLayout() {

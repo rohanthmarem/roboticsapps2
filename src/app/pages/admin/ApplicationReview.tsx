@@ -33,6 +33,8 @@ export function AdminApplicationReview() {
     const [responses, setResponses] = useState<any[]>([]);
     const [honors, setHonors] = useState<any[]>([]);
     const [scores, setScores] = useState<Record<string, number>>({});
+    const [positionScores, setPositionScores] = useState<Record<string, Record<string, number>>>({});
+    const [selectedScoringPosition, setSelectedScoringPosition] = useState<string>("overall");
     const [notes, setNotes] = useState("");
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -97,6 +99,7 @@ export function AdminApplicationReview() {
                     );
                     if (myReview) {
                         setScores(myReview.scores || {});
+                        setPositionScores(myReview.position_scores || {});
                         setNotes(myReview.notes || "");
                     }
                 }
@@ -124,7 +127,7 @@ export function AdminApplicationReview() {
         if (existingReview) {
             const { error: err } = await supabase
                 .from("reviews")
-                .update({ scores, notes, updated_at: new Date().toISOString() })
+                .update({ scores, position_scores: positionScores, notes, updated_at: new Date().toISOString() })
                 .eq("id", existingReview.id);
             if (err) {
                 console.error("Failed to update review:", err);
@@ -137,6 +140,7 @@ export function AdminApplicationReview() {
                 application_id: application.id,
                 reviewer_id: adminProfile.id,
                 scores,
+                position_scores: positionScores,
                 notes,
                 updated_at: new Date().toISOString(),
             });
@@ -684,9 +688,39 @@ export function AdminApplicationReview() {
                 {/* Right pane: Rubric */}
                 <div className="w-72 bg-white border-l border-[#dbe0ec] flex flex-col shrink-0">
                     <div className="px-5 py-4 border-b border-[#dbe0ec]">
-                        <p className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.08em]">
+                        <p className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.08em] mb-3">
                             Reviewer Rubric
                         </p>
+                        {/* Scoring context: Overall + one tab per position */}
+                        {appliedPositions.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                                <button
+                                    onClick={() => setSelectedScoringPosition("overall")}
+                                    className={cn(
+                                        "px-2 py-1 font-['Geist_Mono',monospace] text-[10px] border transition-colors",
+                                        selectedScoringPosition === "overall"
+                                            ? "bg-black border-black text-white"
+                                            : "border-[#dbe0ec] text-[#6c6c6c] hover:border-black hover:text-black"
+                                    )}
+                                >
+                                    Overall
+                                </button>
+                                {appliedPositions.map((ap: any) => (
+                                    <button
+                                        key={ap.position_id || ap.id}
+                                        onClick={() => setSelectedScoringPosition(ap.position_id || ap.id)}
+                                        className={cn(
+                                            "px-2 py-1 font-['Geist_Mono',monospace] text-[10px] border transition-colors",
+                                            selectedScoringPosition === (ap.position_id || ap.id)
+                                                ? "bg-black border-black text-white"
+                                                : "border-[#dbe0ec] text-[#6c6c6c] hover:border-black hover:text-black"
+                                        )}
+                                    >
+                                        {ap.positions?.title?.split(" ").slice(0, 2).join(" ") || "?"}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-5 space-y-6">
@@ -787,34 +821,47 @@ export function AdminApplicationReview() {
                             </div>
                         )}
 
-                        {RUBRIC.map((criterion) => (
-                            <div key={criterion.id}>
-                                <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm mb-3">
-                                    {criterion.label}
-                                </p>
-                                <div className="flex gap-1.5">
-                                    {[1, 2, 3, 4, 5].map((score) => (
-                                        <button
-                                            key={score}
-                                            onClick={() =>
-                                                setScores({
-                                                    ...scores,
-                                                    [criterion.id]: score,
-                                                })
-                                            }
-                                            className={cn(
-                                                "w-9 h-9 border font-['Geist_Mono',monospace] text-sm transition-colors",
-                                                scores[criterion.id] === score
-                                                    ? "bg-black border-black text-white"
-                                                    : "border-[#dbe0ec] text-[#6c6c6c] hover:border-black hover:text-black",
-                                            )}
-                                        >
-                                            {score}
-                                        </button>
-                                    ))}
+                        {(() => {
+                            const isOverall = selectedScoringPosition === "overall";
+                            const activeScores = isOverall
+                                ? scores
+                                : (positionScores[selectedScoringPosition] || {});
+                            const setActiveScores = (updated: Record<string, number>) => {
+                                if (isOverall) {
+                                    setScores(updated);
+                                } else {
+                                    setPositionScores({ ...positionScores, [selectedScoringPosition]: updated });
+                                }
+                            };
+                            return RUBRIC.map((criterion) => (
+                                <div key={criterion.id}>
+                                    <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm mb-3">
+                                        {criterion.label}
+                                    </p>
+                                    <div className="flex gap-1.5">
+                                        {[1, 2, 3, 4, 5].map((score) => (
+                                            <button
+                                                key={score}
+                                                onClick={() =>
+                                                    setActiveScores({
+                                                        ...activeScores,
+                                                        [criterion.id]: score,
+                                                    })
+                                                }
+                                                className={cn(
+                                                    "w-9 h-9 border font-['Geist_Mono',monospace] text-sm transition-colors",
+                                                    activeScores[criterion.id] === score
+                                                        ? "bg-black border-black text-white"
+                                                        : "border-[#dbe0ec] text-[#6c6c6c] hover:border-black hover:text-black",
+                                                )}
+                                            >
+                                                {score}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            ));
+                        })()}
 
                         <div>
                             <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm mb-2">
@@ -828,27 +875,28 @@ export function AdminApplicationReview() {
                             />
                         </div>
 
-                        {Object.keys(scores).length > 0 && (
-                            <div className="border border-[#dbe0ec] px-4 py-3">
-                                <div className="flex justify-between">
-                                    <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.06em]">
-                                        Avg Score
-                                    </span>
-                                    <span className="font-['Geist_Mono',monospace] text-sm text-black font-medium">
-                                        {(
-                                            Object.values(scores).reduce(
-                                                (a, b) => a + b,
-                                                0,
-                                            ) / Object.keys(scores).length
-                                        ).toFixed(1)}
-                                        <span className="text-[#6c6c6c] text-[10px]">
-                                            {" "}
-                                            / 5.0
+                        {(() => {
+                            const isOverall = selectedScoringPosition === "overall";
+                            const activeScores = isOverall
+                                ? scores
+                                : (positionScores[selectedScoringPosition] || {});
+                            if (Object.keys(activeScores).length === 0) return null;
+                            const avg = Object.values(activeScores).reduce((a, b) => a + b, 0) / Object.keys(activeScores).length;
+                            const posLabel = isOverall ? "Overall Avg" : "Position Avg";
+                            return (
+                                <div className="border border-[#dbe0ec] px-4 py-3">
+                                    <div className="flex justify-between">
+                                        <span className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c] uppercase tracking-[0.06em]">
+                                            {posLabel}
                                         </span>
-                                    </span>
+                                        <span className="font-['Geist_Mono',monospace] text-sm text-black font-medium">
+                                            {avg.toFixed(1)}
+                                            <span className="text-[#6c6c6c] text-[10px]"> / 5.0</span>
+                                        </span>
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
 
                         {/* All Reviews */}
                         {allReviews.filter(

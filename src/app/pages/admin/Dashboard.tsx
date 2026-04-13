@@ -6,6 +6,8 @@ import { supabase } from "../../lib/supabase";
 import { cn } from "../../lib/utils";
 import { STATUS_LABELS } from "../../data";
 
+const DASHBOARD_STATE_KEY = "adminDashboardState";
+
 const COLUMNS: { key: string; label: string }[] = [
     { key: "draft", label: "Draft" },
     { key: "submitted", label: "Submitted" },
@@ -152,11 +154,22 @@ function PositionTags({
     );
 }
 
+function readDashboardState() {
+    try {
+        const raw = sessionStorage.getItem(DASHBOARD_STATE_KEY);
+        if (raw) return JSON.parse(raw);
+    } catch {}
+    return null;
+}
+
 export function AdminDashboard() {
     const { applications, loading, refetch } = useAllApplications();
     const { positions: allPositions } = usePositions();
-    const [view, setView] = useState<"table" | "kanban">("table");
-    const [searchTerm, setSearchTerm] = useState("");
+    const savedState = readDashboardState();
+    const [view, setView] = useState<"table" | "kanban">(savedState?.view ?? "table");
+    const [searchTerm, setSearchTerm] = useState(savedState?.searchTerm ?? "");
+    const scrollRestoredRef = useRef(false);
+
     const [updating, setUpdating] = useState<string | null>(null);
     const [statusError, setStatusError] = useState<string | null>(null);
     const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
@@ -166,6 +179,38 @@ export function AdminDashboard() {
     const [deletePassword, setDeletePassword] = useState("");
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [deleting, setDeleting] = useState(false);
+
+    // Persist view + searchTerm whenever they change
+    useEffect(() => {
+        try {
+            const current = readDashboardState() || {};
+            sessionStorage.setItem(DASHBOARD_STATE_KEY, JSON.stringify({ ...current, view, searchTerm }));
+        } catch {}
+    }, [view, searchTerm]);
+
+    // Save scroll position on unmount
+    useEffect(() => {
+        return () => {
+            try {
+                const current = readDashboardState() || {};
+                sessionStorage.setItem(DASHBOARD_STATE_KEY, JSON.stringify({ ...current, scrollY: window.scrollY }));
+            } catch {}
+        };
+    }, []);
+
+    // Restore scroll after content renders (only once, after loading finishes)
+    useEffect(() => {
+        if (loading || scrollRestoredRef.current) return;
+        const savedScrollY = savedState?.scrollY;
+        if (savedScrollY != null && savedScrollY > 0) {
+            requestAnimationFrame(() => {
+                window.scrollTo({ top: savedScrollY, behavior: "instant" });
+                scrollRestoredRef.current = true;
+            });
+        } else {
+            scrollRestoredRef.current = true;
+        }
+    }, [loading, savedState?.scrollY]);
 
     const handleQuickStatus = async (appId: string, newStatus: string) => {
         setUpdating(appId);
