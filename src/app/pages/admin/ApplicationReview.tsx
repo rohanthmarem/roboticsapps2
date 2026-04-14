@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, Link, useNavigate } from "react-router";
 import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -47,6 +47,12 @@ const [deleteModalOpen, setDeleteModalOpen] = useState(false);
     const [deletePassword, setDeletePassword] = useState("");
     const [deleteError, setDeleteError] = useState<string | null>(null);
     const [deleting, setDeleting] = useState(false);
+    const [interviewNotes, setInterviewNotes] = useState<any[]>([]);
+    const [myInterviewNote, setMyInterviewNote] = useState("");
+    const [interviewNoteSaving, setInterviewNoteSaving] = useState(false);
+    const [interviewNoteSaved, setInterviewNoteSaved] = useState(false);
+    const interviewNoteDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const isFirstInterviewNoteLoad = useRef(true);
 const RUBRIC = [
         { id: "experience", label: "Relevant Experience" },
         { id: "essay", label: "Response Quality" },
@@ -68,12 +74,13 @@ const RUBRIC = [
 
             if (app) {
                 // Fetch all related data in parallel
-                const [profResult, actsResult, respsResult, honsResult, revsResult] = await Promise.all([
+                const [profResult, actsResult, respsResult, honsResult, revsResult, intNotesResult] = await Promise.all([
                     supabase.from("profiles").select("*").eq("id", app.user_id).single(),
                     supabase.from("activities").select("*").eq("user_id", app.user_id).order("sort_order"),
                     supabase.from("responses").select("*, questions(prompt)").eq("application_id", app.id),
                     supabase.from("honors").select("*").eq("user_id", app.user_id).order("sort_order"),
                     supabase.from("reviews").select("*, profiles:reviewer_id(first_name, last_name, email)").eq("application_id", app.id).order("updated_at", { ascending: false }),
+                    supabase.from("interview_notes").select("*, profiles:admin_user_id(first_name, last_name, email)").eq("application_id", app.id).order("updated_at", { ascending: false }),
                 ]);
 
                 setApplicantProfile(profResult.data);
@@ -81,6 +88,7 @@ const RUBRIC = [
                 setResponses(respsResult.data || []);
                 setHonors(honsResult.data || []);
                 setAllReviews(revsResult.data || []);
+                setInterviewNotes(intNotesResult.data || []);
 
                 // Set current admin's scores/notes into edit state
                 if (adminProfile && revsResult.data) {
@@ -93,11 +101,84 @@ const RUBRIC = [
                         setNotes(myReview.notes || "");
                     }
                 }
+
+                // Set current admin's interview note
+                if (adminProfile && intNotesResult.data) {
+                    const myNote = intNotesResult.data.find(
+                        (n: any) => n.admin_user_id === adminProfile.id,
+                    );
+                    setMyInterviewNote(myNote?.content || "");
+                }
             }
             setLoading(false);
         };
         fetchData();
     }, [id, adminProfile]);
+
+    // Autosave interview note with 1s debounce
+    useEffect(() => {
+        if (isFirstInterviewNoteLoad.current) {
+            isFirstInterviewNoteLoad.current = false;
+            return;
+        }
+        if (!application || !adminProfile) return;
+
+        if (interviewNoteDebounceRef.current) {
+            clearTimeout(interviewNoteDebounceRef.current);
+        }
+
+        interviewNoteDebounceRef.current = setTimeout(async () => {
+            setInterviewNoteSaving(true);
+            setInterviewNoteSaved(false);
+            const { error: err } = await supabase
+                .from("interview_notes")
+                .upsert(
+                    {
+                        application_id: application.id,
+                        admin_user_id: adminProfile.id,
+                        content: myInterviewNote,
+                        updated_at: new Date().toISOString(),
+                    },
+                    { onConflict: "application_id,admin_user_id" },
+                );
+            if (!err) {
+                setInterviewNoteSaved(true);
+                // Update the local list so other execs' view refreshes
+                setInterviewNotes((prev) => {
+                    const existing = prev.find((n) => n.admin_user_id === adminProfile.id);
+                    if (existing) {
+                        return prev.map((n) =>
+                            n.admin_user_id === adminProfile.id
+                                ? { ...n, content: myInterviewNote, updated_at: new Date().toISOString() }
+                                : n,
+                        );
+                    }
+                    return [
+                        ...prev,
+                        {
+                            admin_user_id: adminProfile.id,
+                            application_id: application.id,
+                            content: myInterviewNote,
+                            updated_at: new Date().toISOString(),
+                            profiles: {
+                                first_name: adminProfile.first_name,
+                                last_name: adminProfile.last_name,
+                                email: adminProfile.email,
+                            },
+                        },
+                    ];
+                });
+                setTimeout(() => setInterviewNoteSaved(false), 2000);
+            }
+            setInterviewNoteSaving(false);
+        }, 1000);
+
+        return () => {
+            if (interviewNoteDebounceRef.current) {
+                clearTimeout(interviewNoteDebounceRef.current);
+            }
+        };
+    }, [myInterviewNote]);
 
     const handleSaveReview = async () => {
         if (!application || !adminProfile) return;
@@ -533,6 +614,89 @@ const RUBRIC = [
                                         </p>
                                     </div>
                                 ))}
+                            </section>
+                        )}
+
+                        {/* Interview Notes — visible once application reaches interview stage */}
+                        {["interview_scheduled", "accepted", "rejected"].includes(application.status) && (
+                            <section className="bg-white border-2 border-black">
+                                <div className="flex items-center justify-between px-6 py-4 border-b-2 border-black bg-black">
+                                    <p className="font-['Geist_Mono',monospace] text-[10px] text-white uppercase tracking-[0.08em]">
+                                        Interview Notes
+                                    </p>
+                                    <span className="font-['Geist_Mono',monospace] text-[10px] text-[#aaaaaa]">
+                                        006
+                                    </span>
+                                </div>
+
+                                {/* Current admin's editable note */}
+                                <div className="px-6 py-5 border-b border-[#dbe0ec]">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <p className="font-['Radio_Canada_Big',sans-serif] font-medium text-black text-sm">
+                                            {adminProfile
+                                                ? `${adminProfile.first_name || ""} ${adminProfile.last_name || ""}`.trim() || adminProfile.email
+                                                : "Your Notes"}
+                                            <span className="ml-2 font-['Geist_Mono',monospace] text-[10px] text-white bg-black px-1.5 py-0.5">
+                                                you
+                                            </span>
+                                        </p>
+                                        <span className={cn(
+                                            "font-['Geist_Mono',monospace] text-[10px] transition-opacity",
+                                            interviewNoteSaving || interviewNoteSaved ? "opacity-100" : "opacity-0"
+                                        )}>
+                                            {interviewNoteSaving
+                                                ? <span className="text-[#6c6c6c] flex items-center gap-1"><Loader2 className="w-2.5 h-2.5 animate-spin" /> saving</span>
+                                                : <span className="text-black">saved</span>
+                                            }
+                                        </span>
+                                    </div>
+                                    <textarea
+                                        className="w-full h-36 border border-[#dbe0ec] bg-[#f9f9f7] px-4 py-3 font-['Source_Serif_4',serif] text-sm text-black leading-relaxed resize-none outline-none focus:border-black transition-colors placeholder-[#6c6c6c]"
+                                        placeholder="Add your interview notes here — autosaves as you type..."
+                                        value={myInterviewNote}
+                                        onChange={(e) => setMyInterviewNote(e.target.value)}
+                                    />
+                                </div>
+
+                                {/* Other admins' notes (read-only) */}
+                                {interviewNotes.filter((n) => n.admin_user_id !== adminProfile?.id && n.content?.trim()).map((note, i) => {
+                                    const prof = note.profiles;
+                                    const firstName = prof?.first_name || "";
+                                    const lastName = prof?.last_name || "";
+                                    const name = `${firstName} ${lastName}`.trim() || prof?.email || "Unknown";
+                                    const initials = (firstName.charAt(0) + lastName.charAt(0)).toUpperCase() || "?";
+                                    return (
+                                        <div key={note.id || note.admin_user_id} className={cn("px-6 py-5", i !== 0 && "border-t border-[#dbe0ec]")}>
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <div className="w-6 h-6 bg-black flex items-center justify-center shrink-0">
+                                                    <span className="font-['Geist_Mono',monospace] text-[9px] text-white leading-none">
+                                                        {initials}
+                                                    </span>
+                                                </div>
+                                                <span className="font-['Radio_Canada_Big',sans-serif] text-black text-sm font-medium">
+                                                    {name}
+                                                </span>
+                                                {note.updated_at && (
+                                                    <span className="font-['Geist_Mono',monospace] text-[9px] text-[#6c6c6c] ml-auto">
+                                                        {new Date(note.updated_at).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="font-['Source_Serif_4',serif] text-black text-sm leading-relaxed bg-[#f9f9f7] border border-[#dbe0ec] px-5 py-4 whitespace-pre-wrap">
+                                                {note.content}
+                                            </p>
+                                        </div>
+                                    );
+                                })}
+
+                                {/* Empty state if no one else has notes yet */}
+                                {interviewNotes.filter((n) => n.admin_user_id !== adminProfile?.id && n.content?.trim()).length === 0 && (
+                                    <div className="px-6 py-4">
+                                        <p className="font-['Geist_Mono',monospace] text-[10px] text-[#6c6c6c]">
+                                            No notes from other reviewers yet.
+                                        </p>
+                                    </div>
+                                )}
                             </section>
                         )}
                     </div>
